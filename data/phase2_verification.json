@@ -1,0 +1,96 @@
+{
+  "phase": 2,
+  "verification_date_local": "2026-10-27",
+  "timezone": "Asia/Calcutta",
+  "python_files_compiled": 19,
+  "compile_command": "python -m py_compile on every project Python file",
+  "phase2_automated_tests_passed": 15,
+  "phase1_regression_tests_passed": 14,
+  "live_history_rows": 1254,
+  "live_ticker": "AAPL",
+  "live_model_epochs": 3,
+  "final_live_check_loaded_verified_cache": true,
+  "horizons_verified": [
+    1,
+    7,
+    30
+  ],
+  "checks": [
+    "real Keras training and cache reload",
+    "training-only scaling and purged future labels",
+    "30 stochastic dropout calls",
+    "finite positive ordered and anchored price corridors",
+    "confidence scores from 0 to 99",
+    "reasoning and catalyst JSON payloads",
+    "FastAPI health HTTP 200",
+    "Streamlit health HTTP 200",
+    "Streamlit page rendered without exceptions"
+  ],
+  "source_status": {
+    "news": "empty",
+    "calendar": "available",
+    "macro_calendar": {
+      "status": "verified_schedule_snapshot",
+      "source": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+      "verified_on": "2026-10-27",
+      "covered_years": [
+        2026,
+        2027
+      ]
+    }
+  },
+  "heldout_metrics": {
+    "1": {
+      "rmse": 4.486064826782197,
+      "mae": 3.181556185601107,
+      "directional_accuracy": 53.46938775510204,
+      "naive_rmse": 4.48499288226702,
+      "naive_mae": 3.1857142857142855,
+      "naive_directional_accuracy": 0.0,
+      "beats_baseline": false,
+      "test_samples": 245,
+      "log_return_rmse": 0.015334080116347102,
+      "normalized_test_error": 0.9998688630387762,
+      "test_interval_coverage_pct": 94.28571428571428,
+      "evaluation": "walk_forward_origin_to_horizon_target_price"
+    },
+    "7": {
+      "rmse": 11.447461550111766,
+      "mae": 9.157119360795594,
+      "directional_accuracy": 57.74058577405857,
+      "naive_rmse": 11.62163414576074,
+      "naive_mae": 9.332637387838323,
+      "naive_directional_accuracy": 0.0,
+      "beats_baseline": true,
+      "test_samples": 239,
+      "log_return_rmse": 0.039379485220760346,
+      "normalized_test_error": 0.9838164297608263,
+      "test_interval_coverage_pct": 96.23430962343096,
+      "evaluation": "walk_forward_origin_to_horizon_target_price"
+    },
+    "30": {
+      "rmse": 20.859738794683285,
+      "mae": 16.908042404509583,
+      "directional_accuracy": 63.42592592592593,
+      "naive_rmse": 22.150514175469176,
+      "naive_mae": 17.8805098357024,
+      "naive_directional_accuracy": 0.0,
+      "beats_baseline": true,
+      "test_samples": 216,
+      "log_return_rmse": 0.07210952029858,
+      "normalized_test_error": 0.9388027940882224,
+      "test_interval_coverage_pct": 100.0,
+      "evaluation": "walk_forward_origin_to_horizon_target_price"
+    }
+  },
+  "limitations": [
+    "Short verification training does not validate production forecasting accuracy.",
+    "Confidence is an error-adjusted model score, not a calibrated event probability.",
+    "Estimated 80 percent intervals have no guaranteed future coverage.",
+    "Yahoo returned no headlines; sentiment weights were renormalized.",
+    "Stock forecast date labels exclude weekends but do not adjust exchange holidays."
+  ],
+  "temporary_smoke_processes_cleaned_up": true,
+  "environment_note": "Keras serialization and live/startup checks passed outside sandbox temp-file/network restrictions.",
+  "phase_gate": "STOP until explicit continue. Phase 3 routes and Phase 4 UI are not implemented."
+}

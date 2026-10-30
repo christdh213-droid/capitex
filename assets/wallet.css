@@ -1,0 +1,76 @@
+/* CAPITEX wallet: obsidian, violet and emerald. No remote fonts required. */
+:root { color-scheme:dark; }
+.stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {background:#0E0E14;color:#F4F2FC;}
+[data-testid="stToolbar"], [data-testid="stSidebar"], #MainMenu, footer {display:none;}
+.block-container {max-width:1040px;padding:1.25rem 2.3rem 3rem;}
+html,body,[class*="css"] {font-family:Inter,"Segoe UI",Arial,sans-serif;}
+h1,h2,h3,h4,p,label {word-break:normal!important;overflow-wrap:normal!important;}
+.brand {display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;}
+.brand-name {display:flex;align-items:center;gap:10px;font-weight:750;font-size:22px;letter-spacing:4px;}
+.brand-name img {width:48px;height:48px;border-radius:12px;}
+.simulated {font-size:10px;letter-spacing:1.6px;color:#9C99B2;border:1px solid #2B293B;border-radius:20px;padding:7px 10px;}
+.simulated i {display:inline-block;width:5px;height:5px;background:#14F195;border-radius:50%;margin-right:6px;}
+.st-key-main_navigation {max-width:430px;margin:0 auto 18px;}
+.st-key-main_navigation [data-baseweb="button-group"] {width:100%;border-radius:18px;background:#181820;padding:5px;}
+.st-key-main_navigation button {flex:1;border:0!important;font-size:14px;}
+button {white-space:normal!important;word-break:normal!important;overflow-wrap:normal!important;transition:.18s ease!important;}
+.stButton button {border:1px solid #302C44;background:#181820;color:#ECEAF7;border-radius:14px;min-height:44px;}
+.stButton button:hover {border-color:#AB9FF2;color:#D3C9FF;background:#211D31;}
+.stButton button:focus-visible {outline:2px solid #AB9FF2;outline-offset:3px;}
+.stButton button[kind="primary"] {background:#AB9FF2;color:#151020;border:0;font-weight:700;}
+.hero {text-align:center;padding:18px 0 22px;}
+.eyebrow {font-size:11px;letter-spacing:2px;color:#89869F;text-transform:uppercase;font-weight:650;}
+.balance {font-size:clamp(40px,6vw,64px);font-weight:660;letter-spacing:-2.7px;line-height:1.2;margin:8px 0 11px;}
+.gain {color:#14F195!important;}.loss {color:#FF7A8A!important;}.muted {color:#8F8CA4;}
+.change-pill {display:inline-block;border-radius:20px;background:rgba(20,241,149,.07);padding:6px 11px;font-size:13px;}
+.loss-bg {background:rgba(255,92,92,.08)!important;}
+.cash-pills {display:flex;justify-content:center;flex-wrap:wrap;gap:9px;margin-top:20px;}
+.cash-pills span {background:#181820;border:1px solid #252332;border-radius:12px;padding:10px 15px;font-size:12px;color:#9894AB;}
+.cash-pills b {font-weight:600;color:#ECEAF7;margin-left:7px;}
+[class*="st-key-quick_"] button {height:76px;border-radius:17px;background:#1B1828;border:1px solid #2B2540;gap:7px;font-weight:650;}
+[class*="st-key-quick_"] button span {color:#AB9FF2;}
+.section-title {display:flex;align-items:baseline;justify-content:space-between;margin:34px 0 12px;}
+.section-title h3 {font-size:17px;font-weight:620;margin:0;letter-spacing:-.2px;}
+.section-title > span {color:#706D86;font-size:11px;}
+.asset-row {display:flex;align-items:center;gap:12px;min-height:76px;padding:12px 17px;}
+.asset-row img {height:42px;width:42px;object-fit:contain;border-radius:50%;background:#282436;padding:4px;}
+.asset-name {flex:1;min-width:0;}.asset-name b {display:block;color:#ECEAF7;font-size:14px;font-weight:600;}
+.asset-name small {display:block;color:#8E8A9F;font-size:12px;margin-top:3px;}
+.asset-values {text-align:right;white-space:nowrap;}.asset-values b {display:block;font-size:14px;font-weight:600;}
+.asset-values small {display:block;font-size:12px;margin-top:3px;}
+.asset-arrow {font-size:18px;color:#666077;margin-left:9px;}
+[class*="st-key-assetcard_"] {position:relative!important;border:1px solid #242130!important;border-radius:16px;background:#15151D;margin-bottom:8px;}
+[class*="st-key-assetcard_"]:hover {border-color:#62577E!important;background:#1B1827;}
+[class*="st-key-assetcard_"] [data-testid="stElementContainer"]:has(.stButton) {position:absolute!important;inset:0!important;height:100%!important;z-index:3;}
+[class*="st-key-assetcard_"] .stButton, [class*="st-key-assetcard_"] .stButton button {height:100%!important;width:100%!important;}
+[class*="st-key-assetcard_"] .stButton button {background:transparent!important;border:0!important;border-radius:16px!important;}
+[class*="st-key-assetcard_"] .stButton button p {opacity:0;}
+.empty-state {text-align:center;color:#8C879E;border:1px dashed #302B42;border-radius:18px;padding:26px 16px;background:linear-gradient(125deg,#171321,#13131C);}
+.empty-state strong {color:#D1C8E8;display:block;font-size:15px;margin:8px 0;}
+.empty-state .empty-symbol {font-size:25px;color:#AB9FF2;}
+.detail-hero {display:flex;align-items:center;gap:15px;margin:20px 0 12px;}
+.detail-hero img {width:58px;height:58px;border-radius:50%;object-fit:contain;background:#242132;padding:6px;}
+.detail-hero h1 {font-size:24px;letter-spacing:-.8px;margin:0;}.detail-hero p {color:#8E899F;font-size:13px;margin:2px 0;}
+.detail-price {font-size:42px;font-weight:650;letter-spacing:-1.6px;margin:12px 0 3px;}
+.detail-change {font-size:13px;margin-bottom:23px;}
+.time-machine {border:1px solid #302A45;background:linear-gradient(120deg,#211A31,#17151F);border-radius:16px;padding:16px 20px;margin:12px 0 10px;}
+.time-machine .comparison {font-size:18px;font-weight:600;margin-top:6px;}.time-machine small {font-size:11px;color:#A5A0B7;}
+.st-key-buy_action button {background:#14F195!important;color:#092117!important;border:0!important;font-weight:750;min-height:50px;box-shadow:0 5px 25px #14f19512;}
+.st-key-sell_action button {background:#AB9FF2!important;color:#1A122E!important;border:0!important;font-weight:750;min-height:50px;box-shadow:0 5px 25px #ab9ff212;}
+.st-key-order_card {border:1px solid #3B3154!important;background:#181620;border-radius:22px!important;padding:22px!important;margin-top:18px;}
+[data-testid="stNumberInput"] input {background:#211D2B;border-radius:10px;font-size:18px;}
+[data-testid="stMetricLabel"] *, [data-testid="stMetricDelta"] * {white-space:normal!important;text-overflow:clip!important;overflow:visible!important;word-break:normal!important;}
+.footer {color:#6D697F;font-size:10px;text-align:center;margin:42px 0 8px;line-height:1.6;}
+.caption {font-size:11px;color:#7F7A91;}
+@media(max-width:700px) {
+ .block-container {padding:1rem 1rem 2rem;}
+ .asset-row {padding:11px 12px;gap:9px;}.asset-name b,.asset-values b {font-size:13px;}
+ .asset-name small,.asset-values small {font-size:11px;}.asset-arrow {display:none;}
+ .cash-pills span {padding:8px 10px;}.brand-name {font-size:18px;letter-spacing:3px;}
+ .st-key-order_card {padding:14px!important;}.simulated {font-size:8px;letter-spacing:1px;}
+}
+/* Hide the empty fixed Streamlit header so it cannot cover the brand. */
+[data-testid="stHeader"] {display:none!important;}
+.st-key-main_navigation [role="radiogroup"] {display:flex;gap:4px;padding:5px;border:1px solid #2B273B;border-radius:18px;background:#181820;}
+.st-key-main_navigation [role="radio"] {border-radius:13px!important;background:transparent!important;min-height:38px;}
+.st-key-main_navigation [role="radio"][aria-checked="true"] {background:#332B4E!important;color:#D3C7FF;}

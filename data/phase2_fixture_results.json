@@ -1,0 +1,766 @@
+{
+  "input": "deterministic synthetic test fixture, not market data",
+  "training_epochs": 2,
+  "horizons": [
+    {
+      "ticker": "AAPL",
+      "horizon": 1,
+      "horizon_label": "Next 24 Hours (1 Trading Day)",
+      "horizon_basis": "trading_sessions",
+      "current_price": 220.0,
+      "anchor_source": "provided_live_price",
+      "historical_as_of": "2025-05-16T00:00:00+00:00",
+      "median_target_price": 220.0966823730793,
+      "lower_target_price": 217.223203149434,
+      "upper_target_price": 223.00817265046567,
+      "expected_change_pct": 0.04394653321786457,
+      "outlook": "neutral",
+      "confidence": 49.25,
+      "directional_agreement": 1.0,
+      "confidence_method": "99 * MC_directional_agreement / (1 + normalized_heldout_error)",
+      "confidence_is_probability": false,
+      "interval_level": 0.8,
+      "mc_passes": 30,
+      "residual_sigma": 0.010045740962182578,
+      "corridor": {
+        "steps": [
+          0,
+          1
+        ],
+        "timestamps": [
+          "2025-05-16T00:00:00+00:00",
+          "2025-05-19T00:00:00+00:00"
+        ],
+        "median": [
+          220.0,
+          220.0966823730793
+        ],
+        "lower": [
+          220.0,
+          217.223203149434
+        ],
+        "upper": [
+          220.0,
+          223.00817265046567
+        ],
+        "calendar": "weekday_estimate_exchange_holidays_not_adjusted"
+      },
+      "metrics": {
+        "rmse": 1.1392224901327606,
+        "mae": 0.9062757225035433,
+        "directional_accuracy": 47.45762711864407,
+        "naive_rmse": 1.1263143065850014,
+        "naive_mae": 0.9020711182643694,
+        "naive_directional_accuracy": 0.0,
+        "beats_baseline": false,
+        "test_samples": 118,
+        "log_return_rmse": 0.00938615052556361,
+        "normalized_test_error": 1.0100902297286236,
+        "test_interval_coverage_pct": 83.05084745762711,
+        "evaluation": "walk_forward_origin_to_horizon_target_price"
+      },
+      "all_horizon_metrics": {
+        "1": {
+          "rmse": 1.1392224901327606,
+          "mae": 0.9062757225035433,
+          "directional_accuracy": 47.45762711864407,
+          "naive_rmse": 1.1263143065850014,
+          "naive_mae": 0.9020711182643694,
+          "naive_directional_accuracy": 0.0,
+          "beats_baseline": false,
+          "test_samples": 118,
+          "log_return_rmse": 0.00938615052556361,
+          "normalized_test_error": 1.0100902297286236,
+          "test_interval_coverage_pct": 83.05084745762711,
+          "evaluation": "walk_forward_origin_to_horizon_target_price"
+        },
+        "7": {
+          "rmse": 3.875191715216529,
+          "mae": 3.1032167726300295,
+          "directional_accuracy": 38.392857142857146,
+          "naive_rmse": 3.6178076447140106,
+          "naive_mae": 2.878946074156722,
+          "naive_directional_accuracy": 0.0,
+          "beats_baseline": false,
+          "test_samples": 112,
+          "log_return_rmse": 0.03109790966402388,
+          "normalized_test_error": 1.0654375483673817,
+          "test_interval_coverage_pct": 75.0,
+          "evaluation": "walk_forward_origin_to_horizon_target_price"
+        },
+        "30": {
+          "rmse": 9.985918913048813,
+          "mae": 8.605404968962322,
+          "directional_accuracy": 20.224719101123593,
+          "naive_rmse": 9.139377543909143,
+          "naive_mae": 7.729540638922924,
+          "naive_directional_accuracy": 0.0,
+          "beats_baseline": false,
+          "test_samples": 89,
+          "log_return_rmse": 0.0812691311058118,
+          "normalized_test_error": 1.0820611264669309,
+          "test_interval_coverage_pct": 70.78651685393258,
+          "evaluation": "walk_forward_origin_to_horizon_target_price"
+        }
+      },
+      "calibration": {
+        "source": "internal_pre_test_calibration_block",
+        "samples": 65,
+        "mc_passes": 30,
+        "nominal_coverage": 0.8,
+        "observed_calibration_coverage": {
+          "1": 0.8153846153846154,
+          "7": 0.8153846153846154,
+          "30": 0.8153846153846154
+        },
+        "method": "MC_dropout_plus_residual_sigma_sqrt_t_with_empirical_path_error_multiplier",
+        "coverage_guaranteed": false
+      },
+      "model": {
+        "fingerprint": "ffc8c56f06847f4758df89538f108d1bc70a42f8562d5ed522a6b733e86d9051",
+        "parameters": {
+          "version": "capitex-path-v1",
+          "ticker": "PHASE2_TEST",
+          "window": 20,
+          "epochs": 2,
+          "batch_size": 64,
+          "learning_rate": 0.001,
+          "features": [
+            "log_return",
+            "rsi_normalized",
+            "macd_hist_normalized",
+            "price_to_ema20",
+            "volatility_10d"
+          ],
+          "outer_train_rows": 469,
+          "calibration_split": 375,
+          "units": [
+            50,
+            50,
+            25
+          ],
+          "dropout": 0.2,
+          "max_horizon": 30,
+          "seed": 42,
+          "tensorflow": "2.21.0"
+        },
+        "epochs_trained": 2,
+        "loss_curve": [
+          1.0601822137832642,
+          1.0240274667739868
+        ],
+        "final_loss": 1.0240274667739868,
+        "scalers_fit_through": "2024-07-24T00:00:00+00:00",
+        "x_scaler_mean": [
+          0.0004126554427831155,
+          0.524602919388833,
+          -0.00010781159293791165,
+          0.003028038158871913,
+          0.008740708775820574
+        ],
+        "x_scaler_scale": [
+          0.009439649340277512,
+          0.15511236112046278,
+          0.004478944658175868,
+          0.026690540983979046,
+          0.001962337394064268
+        ],
+        "y_scaler_mean": [
+          0.0004126554427831155
+        ],
+        "y_scaler_scale": [
+          0.009439649340277512
+        ],
+        "loaded_from_cache": false,
+        "cache_path": "C:\\Users\\Chris\\Desktop\\python capstone\\data\\tmp10j4c8iz\\capitex_ffc8c56f06847f4758df8953.keras",
+        "feature_columns": [
+          "log_return",
+          "rsi_normalized",
+          "macd_hist_normalized",
+          "price_to_ema20",
+          "volatility_10d"
+        ],
+        "train_test_split": [
+          0.8,
+          0.2
+        ],
+        "fit_samples": 326,
+        "test_start": "2024-12-04T00:00:00+00:00",
+        "training_end": "2024-07-24T00:00:00+00:00",
+        "calibration_start": "2024-07-25T00:00:00+00:00",
+        "calibration_end": "2024-12-03T00:00:00+00:00",
+        "history_as_of": "2025-05-16T00:00:00+00:00"
+      },
+      "limitations": [
+        "Estimated 80% corridor; future coverage is not guaranteed.",
+        "Confidence is an error-adjusted model score, not a success probability.",
+        "Return modeling does not ensure the LSTM beats a persistence baseline."
+      ]
+    },
+    {
+      "ticker": "AAPL",
+      "horizon": 7,
+      "horizon_label": "7 Days",
+      "horizon_basis": "trading_sessions",
+      "current_price": 220.0,
+      "anchor_source": "provided_live_price",
+      "historical_as_of": "2025-05-16T00:00:00+00:00",
+      "median_target_price": 220.7543107876603,
+      "lower_target_price": 212.49422791125178,
+      "upper_target_price": 229.33547988742558,
+      "expected_change_pct": 0.34286853984559773,
+      "outlook": "bullish",
+      "confidence": 47.93,
+      "directional_agreement": 1.0,
+      "confidence_method": "99 * MC_directional_agreement / (1 + normalized_heldout_error)",
+      "confidence_is_probability": false,
+      "interval_level": 0.8,
+      "mc_passes": 30,
+      "residual_sigma": 0.010045740962182578,
+      "corridor": {
+        "steps": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "timestamps": [
+          "2025-05-16T00:00:00+00:00",
+          "2025-05-19T00:00:00+00:00",
+          "2025-05-20T00:00:00+00:00",
+          "2025-05-21T00:00:00+00:00",
+          "2025-05-22T00:00:00+00:00",
+          "2025-05-23T00:00:00+00:00",
+          "2025-05-26T00:00:00+00:00",
+          "2025-05-27T00:00:00+00:00"
+        ],
+        "median": [
+          220.0,
+          220.0739302904768,
+          220.15221630192434,
+          220.30493353681393,
+          220.47856781672488,
+          220.54780245536352,
+          220.63372715184659,
+          220.7543107876603
+        ],
+        "lower": [
+          220.0,
+          217.20077183597257,
+          215.9911748279639,
+          214.82112909056403,
+          214.06796212510218,
+          213.61771067665327,
+          213.6019990024806,
+          212.49422791125178
+        ],
+        "upper": [
+          220.0,
+          222.985095237476,
+          224.39341969065657,
+          225.9287247307921,
+          227.08114929456752,
+          227.70271722234202,
+          227.8969381571667,
+          229.33547988742558
+        ],
+        "calendar": "weekday_estimate_exchange_holidays_not_adjusted"
+      },
+      "metrics": {
+        "rmse": 3.875191715216529,
+        "mae": 3.1032167726300295,
+        "directional_accuracy": 38.392857142857146,
+        "naive_rmse": 3.6178076447140106,
+        "naive_mae": 2.878946074156722,
+        "naive_directional_accuracy": 0.0,
+        "beats_baseline": false,
+        "test_samples": 112,
+        "log_return_rmse": 0.03109790966402388,
+        "normalized_test_error": 1.0654375483673817,
+        "test_interval_coverage_pct": 75.0,
+        "evaluation": "walk_forward_origin_to_horizon_target_price"
+      },
+      "all_horizon_metrics": {
+        "1": {
+          "rmse": 1.1392224901327606,
+          "mae": 0.9062757225035433,
+          "directional_accuracy": 47.45762711864407,
+          "naive_rmse": 1.1263143065850014,
+          "naive_mae": 0.9020711182643694,
+          "naive_directional_accuracy": 0.0,
+          "beats_baseline": false,
+          "test_samples": 118,
+          "log_return_rmse": 0.00938615052556361,
+          "normalized_test_error": 1.0100902297286236,
+          "test_interval_coverage_pct": 83.05084745762711,
+          "evaluation": "walk_forward_origin_to_horizon_target_price"
+        },
+        "7": {
+          "rmse": 3.875191715216529,
+          "mae": 3.1032167726300295,
+          "directional_accuracy": 38.392857142857146,
+          "naive_rmse": 3.6178076447140106,
+          "naive_mae": 2.878946074156722,
+          "naive_directional_accuracy": 0.0,
+          "beats_baseline": false,
+          "test_samples": 112,
+          "log_return_rmse": 0.03109790966402388,
+          "normalized_test_error": 1.0654375483673817,
+          "test_interval_coverage_pct": 75.0,
+          "evaluation": "walk_forward_origin_to_horizon_target_price"
+        },
+        "30": {
+          "rmse": 9.985918913048813,
+          "mae": 8.605404968962322,
+          "directional_accuracy": 20.224719101123593,
+          "naive_rmse": 9.139377543909143,
+          "naive_mae": 7.729540638922924,
+          "naive_directional_accuracy": 0.0,
+          "beats_baseline": false,
+          "test_samples": 89,
+          "log_return_rmse": 0.0812691311058118,
+          "normalized_test_error": 1.0820611264669309,
+          "test_interval_coverage_pct": 70.78651685393258,
+          "evaluation": "walk_forward_origin_to_horizon_target_price"
+        }
+      },
+      "calibration": {
+        "source": "internal_pre_test_calibration_block",
+        "samples": 65,
+        "mc_passes": 30,
+        "nominal_coverage": 0.8,
+        "observed_calibration_coverage": {
+          "1": 0.8153846153846154,
+          "7": 0.8153846153846154,
+          "30": 0.8153846153846154
+        },
+        "method": "MC_dropout_plus_residual_sigma_sqrt_t_with_empirical_path_error_multiplier",
+        "coverage_guaranteed": false
+      },
+      "model": {
+        "fingerprint": "ffc8c56f06847f4758df89538f108d1bc70a42f8562d5ed522a6b733e86d9051",
+        "parameters": {
+          "version": "capitex-path-v1",
+          "ticker": "PHASE2_TEST",
+          "window": 20,
+          "epochs": 2,
+          "batch_size": 64,
+          "learning_rate": 0.001,
+          "features": [
+            "log_return",
+            "rsi_normalized",
+            "macd_hist_normalized",
+            "price_to_ema20",
+            "volatility_10d"
+          ],
+          "outer_train_rows": 469,
+          "calibration_split": 375,
+          "units": [
+            50,
+            50,
+            25
+          ],
+          "dropout": 0.2,
+          "max_horizon": 30,
+          "seed": 42,
+          "tensorflow": "2.21.0"
+        },
+        "epochs_trained": 2,
+        "loss_curve": [
+          1.0601822137832642,
+          1.0240274667739868
+        ],
+        "final_loss": 1.0240274667739868,
+        "scalers_fit_through": "2024-07-24T00:00:00+00:00",
+        "x_scaler_mean": [
+          0.0004126554427831155,
+          0.524602919388833,
+          -0.00010781159293791165,
+          0.003028038158871913,
+          0.008740708775820574
+        ],
+        "x_scaler_scale": [
+          0.009439649340277512,
+          0.15511236112046278,
+          0.004478944658175868,
+          0.026690540983979046,
+          0.001962337394064268
+        ],
+        "y_scaler_mean": [
+          0.0004126554427831155
+        ],
+        "y_scaler_scale": [
+          0.009439649340277512
+        ],
+        "loaded_from_cache": false,
+        "cache_path": "C:\\Users\\Chris\\Desktop\\python capstone\\data\\tmp10j4c8iz\\capitex_ffc8c56f06847f4758df8953.keras",
+        "feature_columns": [
+          "log_return",
+          "rsi_normalized",
+          "macd_hist_normalized",
+          "price_to_ema20",
+          "volatility_10d"
+        ],
+        "train_test_split": [
+          0.8,
+          0.2
+        ],
+        "fit_samples": 326,
+        "test_start": "2024-12-04T00:00:00+00:00",
+        "training_end": "2024-07-24T00:00:00+00:00",
+        "calibration_start": "2024-07-25T00:00:00+00:00",
+        "calibration_end": "2024-12-03T00:00:00+00:00",
+        "history_as_of": "2025-05-16T00:00:00+00:00"
+      },
+      "limitations": [
+        "Estimated 80% corridor; future coverage is not guaranteed.",
+        "Confidence is an error-adjusted model score, not a success probability.",
+        "Return modeling does not ensure the LSTM beats a persistence baseline."
+      ]
+    },
+    {
+      "ticker": "AAPL",
+      "horizon": 30,
+      "horizon_label": "30 Days",
+      "horizon_basis": "trading_sessions",
+      "current_price": 220.0,
+      "anchor_source": "provided_live_price",
+      "historical_as_of": "2025-05-16T00:00:00+00:00",
+      "median_target_price": 223.38225797669588,
+      "lower_target_price": 204.2149844024217,
+      "upper_target_price": 244.3485394805112,
+      "expected_change_pct": 1.537389989407223,
+      "outlook": "bullish",
+      "confidence": 47.55,
+      "directional_agreement": 1.0,
+      "confidence_method": "99 * MC_directional_agreement / (1 + normalized_heldout_error)",
+      "confidence_is_probability": false,
+      "interval_level": 0.8,
+      "mc_passes": 30,
+      "residual_sigma": 0.010045740962182578,
+      "corridor": {
+        "steps": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30
+        ],
+        "timestamps": [
+          "2025-05-16T00:00:00+00:00",
+          "2025-05-19T00:00:00+00:00",
+          "2025-05-20T00:00:00+00:00",
+          "2025-05-21T00:00:00+00:00",
+          "2025-05-22T00:00:00+00:00",
+          "2025-05-23T00:00:00+00:00",
+          "2025-05-26T00:00:00+00:00",
+          "2025-05-27T00:00:00+00:00",
+          "2025-05-28T00:00:00+00:00",
+          "2025-05-29T00:00:00+00:00",
+          "2025-05-30T00:00:00+00:00",
+          "2025-06-02T00:00:00+00:00",
+          "2025-06-03T00:00:00+00:00",
+          "2025-06-04T00:00:00+00:00",
+          "2025-06-05T00:00:00+00:00",
+          "2025-06-06T00:00:00+00:00",
+          "2025-06-09T00:00:00+00:00",
+          "2025-06-10T00:00:00+00:00",
+          "2025-06-11T00:00:00+00:00",
+          "2025-06-12T00:00:00+00:00",
+          "2025-06-13T00:00:00+00:00",
+          "2025-06-16T00:00:00+00:00",
+          "2025-06-17T00:00:00+00:00",
+          "2025-06-18T00:00:00+00:00",
+          "2025-06-19T00:00:00+00:00",
+          "2025-06-20T00:00:00+00:00",
+          "2025-06-23T00:00:00+00:00",
+          "2025-06-24T00:00:00+00:00",
+          "2025-06-25T00:00:00+00:00",
+          "2025-06-26T00:00:00+00:00",
+          "2025-06-27T00:00:00+00:00"
+        ],
+        "median": [
+          220.0,
+          220.10581872818798,
+          220.22663981292604,
+          220.40955261690166,
+          220.5933673021733,
+          220.67868253356238,
+          220.78326512621908,
+          220.85358816391366,
+          220.97732678353069,
+          220.99529756612026,
+          221.1169781453075,
+          221.229700616751,
+          221.32658921803701,
+          221.38935340215963,
+          221.50950659493483,
+          221.6135662395633,
+          221.69374176818837,
+          221.71696516338187,
+          221.8117576261796,
+          221.91857669055992,
+          221.98700845654574,
+          222.14446753310676,
+          222.25388380926896,
+          222.33947070738202,
+          222.47901044433777,
+          222.57243310376197,
+          222.77698617572068,
+          222.95018309091537,
+          223.12602827648323,
+          223.1999124437528,
+          223.38225797669588
+        ],
+        "lower": [
+          220.0,
+          217.2319360616565,
+          216.06347344137717,
+          214.923002845316,
+          214.1793193286084,
+          213.7437390057826,
+          213.74606846860667,
+          212.5892034737065,
+          212.57639179566328,
+          211.79578297070984,
+          211.91239827350194,
+          211.6917764802487,
+          211.67015731857796,
+          211.27259756685785,
+          211.08874159142556,
+          210.5736244584283,
+          209.49709016812778,
+          209.49904033938455,
+          208.97398100709555,
+          208.9020508614445,
+          208.96646879558816,
+          208.86989869930386,
+          207.79086414563156,
+          207.87088153481574,
+          208.00134081871093,
+          206.8496411873092,
+          206.86252333372522,
+          206.8903058270633,
+          205.49088532906177,
+          204.5419051396603,
+          204.2149844024217
+        ],
+        "upper": [
+          220.0,
+          223.01772159437667,
+          224.47002314091432,
+          226.03616291247772,
+          227.19949736627876,
+          227.8386312098307,
+          228.05214855661157,
+          229.43925000833048,
+          229.71026340184358,
+          230.59440023455133,
+          230.72136610435447,
+          231.19736273526775,
+          231.42354933465305,
+          231.99054853441623,
+          232.44471089274123,
+          233.23230944867538,
+          234.60046676417957,
+          234.64743591008613,
+          235.43818988424434,
+          235.74615221479007,
+          235.81884791138745,
+          236.26269157438915,
+          237.72358362051938,
+          237.8151276861694,
+          237.9643799096088,
+          239.49032588782617,
+          239.9157893354675,
+          240.25670966827172,
+          242.2746119114465,
+          243.559875326688,
+          244.3485394805112
+        ],
+        "calendar": "weekday_estimate_exchange_holidays_not_adjusted"
+      },
+      "metrics": {
+        "rmse": 9.985918913048813,
+        "mae": 8.605404968962322,
+        "directional_accuracy": 20.224719101123593,
+        "naive_rmse": 9.139377543909143,
+        "naive_mae": 7.729540638922924,
+        "naive_directional_accuracy": 0.0,
+        "beats_baseline": false,
+        "test_samples": 89,
+        "log_return_rmse": 0.0812691311058118,
+        "normalized_test_error": 1.0820611264669309,
+        "test_interval_coverage_pct": 70.78651685393258,
+        "evaluation": "walk_forward_origin_to_horizon_target_price"
+      },
+      "all_horizon_metrics": {
+        "1": {
+          "rmse": 1.1392224901327606,
+          "mae": 0.9062757225035433,
+          "directional_accuracy": 47.45762711864407,
+          "naive_rmse": 1.1263143065850014,
+          "naive_mae": 0.9020711182643694,
+          "naive_directional_accuracy": 0.0,
+          "beats_baseline": false,
+          "test_samples": 118,
+          "log_return_rmse": 0.00938615052556361,
+          "normalized_test_error": 1.0100902297286236,
+          "test_interval_coverage_pct": 83.05084745762711,
+          "evaluation": "walk_forward_origin_to_horizon_target_price"
+        },
+        "7": {
+          "rmse": 3.875191715216529,
+          "mae": 3.1032167726300295,
+          "directional_accuracy": 38.392857142857146,
+          "naive_rmse": 3.6178076447140106,
+          "naive_mae": 2.878946074156722,
+          "naive_directional_accuracy": 0.0,
+          "beats_baseline": false,
+          "test_samples": 112,
+          "log_return_rmse": 0.03109790966402388,
+          "normalized_test_error": 1.0654375483673817,
+          "test_interval_coverage_pct": 75.0,
+          "evaluation": "walk_forward_origin_to_horizon_target_price"
+        },
+        "30": {
+          "rmse": 9.985918913048813,
+          "mae": 8.605404968962322,
+          "directional_accuracy": 20.224719101123593,
+          "naive_rmse": 9.139377543909143,
+          "naive_mae": 7.729540638922924,
+          "naive_directional_accuracy": 0.0,
+          "beats_baseline": false,
+          "test_samples": 89,
+          "log_return_rmse": 0.0812691311058118,
+          "normalized_test_error": 1.0820611264669309,
+          "test_interval_coverage_pct": 70.78651685393258,
+          "evaluation": "walk_forward_origin_to_horizon_target_price"
+        }
+      },
+      "calibration": {
+        "source": "internal_pre_test_calibration_block",
+        "samples": 65,
+        "mc_passes": 30,
+        "nominal_coverage": 0.8,
+        "observed_calibration_coverage": {
+          "1": 0.8153846153846154,
+          "7": 0.8153846153846154,
+          "30": 0.8153846153846154
+        },
+        "method": "MC_dropout_plus_residual_sigma_sqrt_t_with_empirical_path_error_multiplier",
+        "coverage_guaranteed": false
+      },
+      "model": {
+        "fingerprint": "ffc8c56f06847f4758df89538f108d1bc70a42f8562d5ed522a6b733e86d9051",
+        "parameters": {
+          "version": "capitex-path-v1",
+          "ticker": "PHASE2_TEST",
+          "window": 20,
+          "epochs": 2,
+          "batch_size": 64,
+          "learning_rate": 0.001,
+          "features": [
+            "log_return",
+            "rsi_normalized",
+            "macd_hist_normalized",
+            "price_to_ema20",
+            "volatility_10d"
+          ],
+          "outer_train_rows": 469,
+          "calibration_split": 375,
+          "units": [
+            50,
+            50,
+            25
+          ],
+          "dropout": 0.2,
+          "max_horizon": 30,
+          "seed": 42,
+          "tensorflow": "2.21.0"
+        },
+        "epochs_trained": 2,
+        "loss_curve": [
+          1.0601822137832642,
+          1.0240274667739868
+        ],
+        "final_loss": 1.0240274667739868,
+        "scalers_fit_through": "2024-07-24T00:00:00+00:00",
+        "x_scaler_mean": [
+          0.0004126554427831155,
+          0.524602919388833,
+          -0.00010781159293791165,
+          0.003028038158871913,
+          0.008740708775820574
+        ],
+        "x_scaler_scale": [
+          0.009439649340277512,
+          0.15511236112046278,
+          0.004478944658175868,
+          0.026690540983979046,
+          0.001962337394064268
+        ],
+        "y_scaler_mean": [
+          0.0004126554427831155
+        ],
+        "y_scaler_scale": [
+          0.009439649340277512
+        ],
+        "loaded_from_cache": false,
+        "cache_path": "C:\\Users\\Chris\\Desktop\\python capstone\\data\\tmp10j4c8iz\\capitex_ffc8c56f06847f4758df8953.keras",
+        "feature_columns": [
+          "log_return",
+          "rsi_normalized",
+          "macd_hist_normalized",
+          "price_to_ema20",
+          "volatility_10d"
+        ],
+        "train_test_split": [
+          0.8,
+          0.2
+        ],
+        "fit_samples": 326,
+        "test_start": "2024-12-04T00:00:00+00:00",
+        "training_end": "2024-07-24T00:00:00+00:00",
+        "calibration_start": "2024-07-25T00:00:00+00:00",
+        "calibration_end": "2024-12-03T00:00:00+00:00",
+        "history_as_of": "2025-05-16T00:00:00+00:00"
+      },
+      "limitations": [
+        "Estimated 80% corridor; future coverage is not guaranteed.",
+        "Confidence is an error-adjusted model score, not a success probability.",
+        "Return modeling does not ensure the LSTM beats a persistence baseline."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "phase": 4,
+  "python_sources_compiled": 23,
+  "phase4_tests_passed": 6,
+  "wallet_regression_tests_passed": 13,
+  "earlier_regression_tests_passed": 40,
+  "total_tests_passed": 59,
+  "backend_health_status": 200,
+  "frontend_health_status": 200,
+  "live_forecast_checks": 6,
+  "live_tickers": ["AAPL", "BTC-USD"],
+  "live_horizons": ["24h", "7d", "30d"],
+  "browser_widths_verified": [1280, 800],
+  "browser_horizontal_overflow": false,
+  "reasoning_collapsed_by_default": true,
+  "live_reasoning_expansion_verified": true,
+  "live_trade_bridge_verified": true,
+  "real_wallet_orders_placed_by_verification": 0,
+  "phase5_started": false
+}

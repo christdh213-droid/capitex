@@ -1,0 +1,27 @@
+{
+  "phase": 1,
+  "verification_date_local": "2026-10-27",
+  "timezone": "Asia/Calcutta",
+  "python": "3.13.15",
+  "syntax_check": "python -m py_compile on every project Python source",
+  "module_import_check": "passed",
+  "automated_tests_passed": 14,
+  "live_checks": {
+    "provider": "Yahoo Finance via yfinance",
+    "tickers": ["AAPL", "BTC-USD"],
+    "integer_offsets_per_ticker": 90,
+    "total_offsets_passed": 180,
+    "quote_market_status": "AAPL open; BTC-USD open_24_7",
+    "history_interval": "1h",
+    "evidence_file": "phase1_live_results.json"
+  },
+  "startup_checks": {
+    "fastapi_health_http_status": 200,
+    "streamlit_health_http_status": 200,
+    "streamlit_script_exceptions": 0,
+    "quote_fixture_for_script_render": true,
+    "temporary_processes_cleaned_up": true
+  },
+  "environment_note": "Live fetch and local startup checks passed outside the network-restricted sandbox. The restricted sandbox could not resolve Yahoo DNS or complete child-server startup.",
+  "phase_gate": "Stop until explicit continue. Phases 2-5 have not been implemented."
+}

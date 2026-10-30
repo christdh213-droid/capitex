@@ -1,0 +1,41 @@
+{
+  "scope": "Current-app corrections only; no phase advancement",
+  "date_local": "2026-10-27",
+  "timezone": "Asia/Calcutta",
+  "python_files_compiled": 21,
+  "targeted_tests_passed": 11,
+  "foundation_regression_tests_passed": 14,
+  "smoke": {
+    "fastapi_health_http": 200,
+    "streamlit_health_http": 200,
+    "streamlit_script_exceptions": 0
+  },
+  "btc_regression": {
+    "reference_price": 50000,
+    "buy_fill_both_wallets": 63000,
+    "sell_fill_both_wallets": 65000,
+    "fallback_test_fill": 61000,
+    "fallback_recorded_and_labeled": true,
+    "database_scope": "temporary test wallets only"
+  },
+  "snapshots": {
+    "trade": "each committed fill",
+    "risk": "each check, including no triggers",
+    "reset": "new baseline in reset transaction",
+    "refresh": "max 1 per 30 seconds per wallet across processes"
+  },
+  "layout": {
+    "1280px": "three metrics per row; no metric/label width overflow",
+    "800px": "single metric cards stacked; no metric/label width overflow",
+    "screenshots": [
+      "fixes_layout_1280.jpg",
+      "fixes_layout_800.jpg"
+    ]
+  },
+  "existing_user_trades_preserved": true,
+  "running_urls": [
+    "http://localhost:8501",
+    "http://localhost:8000/docs"
+  ],
+  "stop": "Requested fixes complete; await further instructions."
+}

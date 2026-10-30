@@ -1,0 +1,31 @@
+.predictor-title {margin:8px 0 14px;}
+.predictor-title h1 {font-size:30px;letter-spacing:-1px;margin:9px 0 4px;padding:0;font-weight:650;}
+.predictor-title p {color:#9891AA;font-size:14px;margin:0;}
+.outlook-card,.confidence-card,.st-key-horizon_card {border:1px solid #30283F!important;background:linear-gradient(130deg,#1C1827,#15151D);border-radius:20px!important;min-height:210px;padding:22px!important;margin-top:16px;box-sizing:border-box;}
+.outlook-badge {font-size:14px;font-weight:600;margin-top:22px;}
+.bullish .outlook-badge,.bullish .outlook-move {color:#14F195;}
+.bearish .outlook-badge,.bearish .outlook-move {color:#FF5C5C;}
+.neutral .outlook-badge,.neutral .outlook-move {color:#F5BE62;}
+.outlook-move {font-size:35px;font-weight:650;letter-spacing:-1px;margin:8px 0;}
+.card-note {color:#8E879D;font-size:11px;}.card-note b {color:#D3CBE6;font-weight:500;}
+.confidence-card {text-align:center;}.confidence-ring {width:128px;height:128px;position:relative;margin:9px auto 0;}
+.confidence-ring svg {width:100%;height:100%;}.confidence-ring > div {position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.confidence-ring b {font-size:27px;color:#E8E0FF;}.confidence-ring span {font-size:10px;color:#A39AB8;}
+.st-key-horizon_card [role="radiogroup"] {display:flex;flex-wrap:wrap;gap:5px;}
+.st-key-horizon_card [role="radio"] {min-height:34px;font-size:11px;flex:1 1 auto;border-radius:9px!important;}
+.st-key-horizon_card [data-testid="stCaptionContainer"] {margin-top:16px;}
+.forecast-heading {display:flex;justify-content:space-between;align-items:center;gap:14px;margin:22px 0 0;}
+.forecast-heading h3 {font-size:18px;margin:0 0 9px;padding:0;}.forecast-heading .forecast-ticker {font-size:11px;color:#8C849B;margin-left:8px;}
+.forecast-heading > b {font-size:22px;text-align:right;}.forecast-heading small {display:block;font-size:10px;color:#8D859E;font-weight:400;margin-top:4px;}
+.chart-key {font-size:10px;color:#C7C1D7;}.chart-key i {color:#AB9FF2;font-style:normal;margin-left:12px;}
+.reason-block {padding:8px 0 0;}.reason-title {font-size:13px;font-weight:600;color:#DCD4ED;margin:12px 0;}
+.sentiment-reading {font-size:25px;font-weight:600;}.sentiment-reading span {font-size:13px;color:#AAA1BB;font-weight:400;}
+.sentiment-track {position:relative;height:9px;border-radius:12px;background:linear-gradient(90deg,#FF5C5C,#E8AC62 35%,#9CA48F 50%,#55C98B 70%,#14F195);margin:18px 0 10px;}
+.sentiment-track i {position:absolute;top:-4px;transform:translateX(-50%);width:4px;height:17px;background:#F9F6FF;border-radius:4px;box-shadow:0 0 0 3px #0E0E1466;}
+.sentiment-labels {display:flex;justify-content:space-between;font-size:10px;color:#9B92AD;margin-bottom:10px;}
+.factor-pills {display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px;}
+.factor-pill {font-size:11px;border-radius:20px;padding:8px 11px;background:#252031;border:1px solid #393046;color:#C4B6EF;white-space:normal;line-height:1.5;}
+.factor-pill.bullish {color:#72E9B4;border-color:#234D3D;background:#142B23;}.factor-pill.bearish {color:#FF9898;border-color:#57313C;background:#2E1C25;}.factor-pill.caution {color:#E6C28A;border-color:#51412C;background:#292318;}
+.st-key-trade_prediction {margin-top:12px;}
+@media(max-width:900px) {.outlook-card,.confidence-card,.st-key-horizon_card {padding:16px!important;min-height:225px;}.outlook-move {font-size:29px;}.outlook-badge {font-size:12px;}.forecast-heading h3 {font-size:16px;}.forecast-heading > b {font-size:19px;}}
+@media(max-width:640px) {.outlook-card,.confidence-card,.st-key-horizon_card {min-height:185px;margin-top:4px;}.predictor-title h1 {font-size:25px;}.forecast-heading {flex-wrap:wrap;}.forecast-heading > b {text-align:left;}}
