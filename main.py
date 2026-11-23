@@ -403,6 +403,10 @@ from fastapi import Query
 from threading import RLock
 from time import monotonic
 import reasoning_engine
+import forecast_log
+from time_utils import utc_z
+from market_calendar import completed_history
+from frozen_forecast import load_frozen
 
 
 class CapitexOrder(BaseModel):
@@ -486,7 +490,8 @@ def get_capitex_forecast_bundle(ticker):
         if cached and monotonic()-cached[0]<config.HISTORICAL_CACHE_TTL:
             return cached[1],cached[2]
         history=data_loader.load_market_data(ticker,'5y')
-        bundle=lstm_model.train_multihorizon_model(history,ticker)
+        history=completed_history(ticker,history)
+        bundle=load_frozen(history,ticker)
         if len(_BUNDLE_CACHE)>=8: _BUNDLE_CACHE.pop(next(iter(_BUNDLE_CACHE)))
         _BUNDLE_CACHE[ticker]=(monotonic(),bundle,history)
         return bundle,history
@@ -498,21 +503,20 @@ def capitex_predict(ticker:str,horizon:str='7d'):
         ticker=data_loader._symbol(ticker)
         steps=lstm_model.parse_horizon(horizon)
         bundle,history=get_capitex_forecast_bundle(ticker)
-        quote=data_loader.get_live_quote(ticker)
-        forecast=lstm_model.forecast_multihorizon(bundle,steps,current_price=quote['price'],ticker=ticker)
-        # The chart starts at this quote, rather than the last historical daily bar.
-        origin=pd.Timestamp(quote['timestamp'])
-        crypto=config.ASSET_UNIVERSE.get(ticker,{}).get('kind')=='crypto'
-        dates=(pd.date_range(origin+pd.Timedelta(days=1),periods=steps,freq='D') if crypto
-               else pd.bdate_range(origin+pd.Timedelta(days=1),periods=steps,normalize=False))
-        if 'corridor' in forecast:
-            forecast['corridor']['timestamps']=[origin.isoformat()]+[date.isoformat() for date in dates]
-        recent=[{'timestamp':pd.Timestamp(stamp).isoformat(),'close':float(row.Close)}
-                for stamp,row in history.tail(60).iterrows() if pd.notna(row.Close)]
+        rows,history=forecast_log.log_forecasts(ticker,bundle,history,lstm_model.forecast_multihorizon)
+        row=rows[str(steps)]
+        forecast=__import__('json').loads(row['payload_json'])
+        # Display the persisted forecast, never a newly sampled unlogged path.
+        quote=dict(ticker=ticker,price=row['starting_price'],timestamp=row['data_timestamp'],
+                   source='Completed unadjusted daily close',is_fallback=False,is_stale=False)
+        recent=[{'timestamp':utc_z(stamp),'close':float(r.Close)}
+                for stamp,r in history.tail(60).iterrows() if pd.notna(r.Close)]
         why=reasoning_engine.build_reasoning(ticker,history)
         return dict(forecast,hero={k:forecast[k] for k in
                     ('outlook','expected_change_pct','confidence','median_target_price','horizon_label')},
-                    why=why,quote=quote,history=recent,forecast_as_of=origin.isoformat())
+                    why=why,quote=quote,history=recent,forecast_as_of=row['data_timestamp'],
+                    forecast_log_ids={h:r['id'] for h,r in rows.items()},
+                    logged_forecasts={h:{k:v for k,v in r.items() if k!='payload_json'} for h,r in rows.items()})
     except ValueError as exc:
         raise HTTPException(400,str(exc)) from exc
     except data_loader.MarketDataError as exc:

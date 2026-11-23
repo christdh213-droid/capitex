@@ -135,6 +135,8 @@ class PredictorTests(unittest.TestCase):
                 p.update(outlook=outlook,expected_change_pct=move*100,confidence=110.,median_target_price=float(path[-1]))
                 p['corridor']=dict(median=path.tolist(),lower=(path-width).tolist(),upper=(path+width).tolist())
                 return p
+            # Each mocked model scenario is independent; real refreshes retain stored forecasts.
+            with __import__('database').get_connection() as conn:conn.execute('DELETE FROM forecast_logs')
             with patch('requests.request',side_effect=self.request),patch.object(main.lstm_model,'forecast_multihorizon',side_effect=alternate):
                 page=AppTest.from_file(str(config.BASE_DIR/'app.py')).run(timeout=60)
                 page.session_state['main_navigation']='🧠 AI Predictor';page.run(timeout=60)

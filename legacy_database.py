@@ -1,3 +1,4 @@
+from time_utils import utc_z
 """Database module for SQLite storage of wallets, holdings, trades, and snapshots.
 
 Provides robust context-managed SQLite access, Write-Ahead Logging (WAL) concurrency,
@@ -128,7 +129,7 @@ def init_db(db_path: Optional[Path] = None) -> None:
         cursor.execute('CREATE INDEX IF NOT EXISTS snapshot_wallet_reason ON portfolio_snapshots(wallet_type, reason, id)')
 
         # Seed initial wallets if not present
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = utc_z()
         for wallet_type in config.VALID_WALLET_TYPES:
             cursor.execute(
                 "SELECT cash FROM wallets WHERE wallet_type = ?",
@@ -259,7 +260,7 @@ def record_snapshot(wallet_type: str, net_worth: float, timestamp: Optional[str]
                     return 0
         cursor = conn.execute(
             'INSERT INTO portfolio_snapshots(timestamp,wallet_type,net_worth,reason) VALUES(?,?,?,?)',
-            (stamp.isoformat(), wallet_type, float(net_worth), reason))
+            (utc_z(stamp), wallet_type, float(net_worth), reason))
         return cursor.lastrowid or 0
 
 
@@ -281,7 +282,7 @@ def get_portfolio_snapshots(wallet_type: str, db_path: Optional[Path] = None) ->
 
 def reset_wallets(starting_cash: float = config.STARTING_CASH, db_path: Optional[Path] = None) -> None:
     """Reset both human and AI wallets, clearing holdings, trade ledger, and snapshots."""
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = utc_z()
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute("DELETE FROM holdings")

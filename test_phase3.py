@@ -190,7 +190,7 @@ class WalletTests(unittest.TestCase):
         def forecast(bundle,horizon,**kwargs):
             return {'outlook':'bullish','expected_change_pct':1.,'confidence':50.,
                     'median_target_price':202.,'horizon_label':str(horizon),
-                    'corridor':{'median':[200.,202.],'lower':[200.,190.],'upper':[200.,210.]}}
+                    'corridor':{'median':[200.]+[202.]*horizon,'lower':[200.]+[190.]*horizon,'upper':[200.]+[210.]*horizon}}
         with patch.object(main,'get_capitex_forecast_bundle',return_value=(object(),history)), \
              patch.object(main.lstm_model,'forecast_multihorizon',side_effect=forecast) as called, \
              patch.object(main.reasoning_engine,'build_reasoning',return_value={'sentiment':{'score':50},'catalyst_tags':[]}):

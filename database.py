@@ -1,3 +1,4 @@
+from time_utils import utc_z
 """CAPITEX single-wallet WAL storage; prototype adapters remain isolated."""
 from contextlib import contextmanager
 from pathlib import Path
@@ -68,6 +69,15 @@ def init_db(db_path: Path | None = None):
             opened_at TEXT NOT NULL, updated_at TEXT NOT NULL)""")
         for statement in statements:
             conn.execute(statement)
+        conn.execute('''CREATE TABLE IF NOT EXISTS forecast_logs (
+            id INTEGER PRIMARY KEY, symbol TEXT NOT NULL, asset_type TEXT NOT NULL,
+            model_version TEXT NOT NULL, issued_at TEXT NOT NULL, data_timestamp TEXT NOT NULL,
+            horizon INTEGER NOT NULL, starting_price REAL NOT NULL, target_timestamp TEXT NOT NULL,
+            predicted_price REAL NOT NULL, band_low REAL NOT NULL, band_high REAL NOT NULL,
+            persistence_predicted_price REAL NOT NULL, status TEXT NOT NULL DEFAULT 'PENDING',
+            unavailable_reason TEXT, actual_price REAL, actual_timestamp TEXT, graded_at TEXT,
+            payload_json TEXT NOT NULL,
+            UNIQUE(symbol,horizon,data_timestamp,model_version))''')
         for table, additions in {
             'trade_ledger': {'execution_source': "TEXT DEFAULT 'legacy'",
                              'execution_label': "TEXT DEFAULT 'Historical fill'",
@@ -88,10 +98,14 @@ def init_db(db_path: Path | None = None):
             wallet = conn.execute('SELECT cash FROM wallet WHERE id=1').fetchone()
             held = conn.execute('SELECT COALESCE(SUM(quantity*avg_buy_price),0) FROM holdings').fetchone()[0]
             conn.execute("INSERT INTO portfolio_snapshots(timestamp,net_worth,cash,invested_value,reason) VALUES(?,?,?,?, 'initial')",
-                         (datetime.now(timezone.utc).isoformat(), wallet['cash']+held, wallet['cash'], held))
+                         (utc_z(), wallet['cash']+held, wallet['cash'], held))
+        from time_utils import normalize_existing
+        normalize_existing(conn)
 
     if db_path is None:
         _legacy.init_db()
+        with _legacy.get_connection() as conn:
+            normalize_existing(conn)
 
 
 def get_capitex_wallet(db_path: Path | None = None):

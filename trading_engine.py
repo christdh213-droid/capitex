@@ -1,3 +1,4 @@
+from time_utils import utc_z
 """Trading Execution Engine, Risk Management, and Portfolio Analytics.
 
 Implements:
@@ -144,7 +145,7 @@ def execute_buy(
         return False, f"Invalid purchase price (${price:.2f}).", {}
 
     total_cost = float(cash_budget) if cash_budget is not None else qty * price
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = utc_z()
 
     with database.get_legacy_connection() as conn:
         conn.execute("BEGIN IMMEDIATE")
@@ -233,7 +234,7 @@ def execute_buy(
             INSERT INTO trade_ledger (timestamp, wallet_type, ticker, action, quantity, price, realized_pnl, execution_source, execution_label, quote_timestamp)
             VALUES (?, ?, ?, 'BUY', ?, ?, 0.0, ?, ?, ?)
             """,
-            (now_iso, wallet_type, clean_ticker, qty, price, execution["execution_source"], execution["execution_label"], execution["quote_timestamp"]),
+            (now_iso, wallet_type, clean_ticker, qty, price, execution["execution_source"], execution["execution_label"], (utc_z(execution["quote_timestamp"]) if execution.get("quote_timestamp") else None)),
         )
 
         # 5. Record Net Worth Snapshot
@@ -297,7 +298,7 @@ def execute_sell(
     if price <= 0:
         return False, f"Invalid execution price (${price:.2f}).", {}
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = utc_z()
 
     with database.get_legacy_connection() as conn:
         conn.execute("BEGIN IMMEDIATE")
@@ -364,7 +365,7 @@ def execute_sell(
             INSERT INTO trade_ledger (timestamp, wallet_type, ticker, action, quantity, price, realized_pnl, execution_source, execution_label, quote_timestamp)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (now_iso, wallet_type, clean_ticker, ledger_action, qty_to_sell, price, realized_pnl, execution["execution_source"], execution["execution_label"], execution["quote_timestamp"]),
+            (now_iso, wallet_type, clean_ticker, ledger_action, qty_to_sell, price, realized_pnl, execution["execution_source"], execution["execution_label"], (utc_z(execution["quote_timestamp"]) if execution.get("quote_timestamp") else None)),
         )
 
         # 5. Record Net Worth Snapshot
@@ -733,7 +734,7 @@ def _capitex_snapshot(conn, prices, reason):
     short_equity=sum(max(0.,r['locked_collateral']+(r['avg_entry_price']-prices.get(r['symbol'],r['avg_entry_price']))*r['quantity']) for r in conn.execute('SELECT * FROM short_positions'))
     invested+=short_equity
     conn.execute('INSERT INTO portfolio_snapshots(timestamp,net_worth,cash,invested_value,reason) VALUES(?,?,?,?,?)',
-                 (now.isoformat(),cash+invested,cash,invested,reason))
+                 (utc_z(now),cash+invested,cash,invested,reason))
 
 
 def capitex_wallet_summary(*, include_watchlist=True, snapshot_reason='refresh'):
@@ -810,7 +811,7 @@ def capitex_wallet_summary(*, include_watchlist=True, snapshot_reason='refresh')
                 total_trades=trades,total_closed_trades=stats['n'],realized_pnl=stats['pnl'],
                 win_rate_pct=stats['wins']/stats['n']*100 if stats['n'] else None,
                 win_loss_ratio=(stats['wins']/stats['losses'] if stats['losses'] else float(stats['wins'] or 0)) if stats['n'] else None,
-                max_drawdown_pct=drawdown,as_of=datetime.now(timezone.utc).isoformat())
+                max_drawdown_pct=drawdown,as_of=utc_z())
 
 
 def _order_receipt(row, cash, replay=False):
@@ -886,12 +887,12 @@ def execute_capitex_trade(ticker, action, *, amount=None, quantity=None, client_
             cash+=total
         conn.execute('UPDATE wallet SET cash=? WHERE id=1',(float(cash),))
         ledger_action=reason if action=='SELL' and reason in ('STOP_LOSS','TAKE_PROFIT') else action
-        now=datetime.now(timezone.utc).isoformat()
+        now=utc_z()
         cursor=conn.execute('''INSERT INTO trade_ledger(timestamp,ticker,action,quantity,price,total_value,realized_pnl,
                             execution_source,execution_label,quote_timestamp,client_order_id,order_fingerprint)
                             VALUES(?,?,?,?,?,?,?,?,?,?,?,?)''',
                             (now,ticker,ledger_action,float(qty),float(price),float(total),float(pnl),
-                             execution['execution_source'],execution['execution_label'],execution['quote_timestamp'],client_order_id,fingerprint))
+                             execution['execution_source'],execution['execution_label'],(utc_z(execution['quote_timestamp']) if execution.get('quote_timestamp') else None),client_order_id,fingerprint))
         prices[ticker]=float(price)
         _liquidate_shorts(conn,prices)
         _capitex_snapshot(conn,prices,'trade')
@@ -910,7 +911,7 @@ def reset_capitex_wallet():
         conn.execute('DELETE FROM trade_ledger')
         conn.execute('DELETE FROM portfolio_snapshots')
         conn.execute('UPDATE wallet SET cash=?,starting_cash=? WHERE id=1',(config.STARTING_CASH,config.STARTING_CASH))
-        conn.execute("INSERT INTO trade_ledger(timestamp,ticker,action,quantity,price,total_value,realized_pnl,execution_source,execution_label) VALUES(?,'SYSTEM','RESET',0,0,0,0,'reset','Wallet reset')",(datetime.now(timezone.utc).isoformat(),))
+        conn.execute("INSERT INTO trade_ledger(timestamp,ticker,action,quantity,price,total_value,realized_pnl,execution_source,execution_label) VALUES(?,'SYSTEM','RESET',0,0,0,0,'reset','Wallet reset')",(utc_z(),))
         _capitex_snapshot(conn,{},'reset')
     return {'cash':config.STARTING_CASH,'message':'Your virtual wallet is ready for a fresh start.'}
 
@@ -945,7 +946,7 @@ def _short_close(conn, row, qty, execution, action, client_order_id=None, finger
         conn.execute('DELETE FROM short_positions WHERE symbol=?',(row['symbol'],))
     else:
         conn.execute('UPDATE short_positions SET quantity=?,locked_collateral=?,updated_at=? WHERE symbol=?',
-                     (remaining,max(0.,row['locked_collateral']-released),datetime.now(timezone.utc).isoformat(),row['symbol']))
+                     (remaining,max(0.,row['locked_collateral']-released),utc_z(),row['symbol']))
     conn.execute('UPDATE wallet SET cash=cash+? WHERE id=1',(returned,))
     return _short_ledger(conn,row['symbol'],action,qty,execution,pnl,client_order_id,fingerprint)
 
@@ -953,7 +954,7 @@ def _short_close(conn, row, qty, execution, action, client_order_id=None, finger
 def _short_ledger(conn,ticker,action,qty,execution,pnl=0.,client_order_id=None,fingerprint=None):
     cursor=conn.execute('''INSERT INTO trade_ledger(timestamp,ticker,action,quantity,price,total_value,realized_pnl,
         execution_source,execution_label,quote_timestamp,client_order_id,order_fingerprint) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)''',
-        (datetime.now(timezone.utc).isoformat(),ticker,action,qty,execution['price'],qty*execution['price'],pnl,
+        (utc_z(),ticker,action,qty,execution['price'],qty*execution['price'],pnl,
          execution['execution_source'],execution['execution_label'],execution.get('quote_timestamp'),client_order_id,fingerprint))
     return dict(conn.execute('SELECT * FROM trade_ledger WHERE id=?',(cursor.lastrowid,)).fetchone())
 
@@ -963,7 +964,7 @@ def _liquidate_shorts(conn,prices):
         price=prices.get(row['symbol'])
         if price is not None and price>=2*row['avg_entry_price']:
             execution=dict(price=price,execution_source='market_quote',execution_label='Refresh quote: collateral liquidation',
-                           quote_timestamp=datetime.now(timezone.utc).isoformat())
+                           quote_timestamp=utc_z())
             _short_close(conn,row,row['quantity'],execution,'SHORT_LIQUIDATED')
             _capitex_snapshot(conn,prices,'liquidation')
 
@@ -1008,7 +1009,7 @@ def execute_capitex_short(ticker,action,*,quantity=None,amount=None,client_order
             total_qty=old_qty+qty
             avg=((old_qty*row['avg_entry_price'] if row else 0.)+collateral)/total_qty
             locked=(row['locked_collateral'] if row else 0.)+collateral
-            now=datetime.now(timezone.utc).isoformat()
+            now=utc_z()
             conn.execute('''INSERT INTO short_positions(symbol,quantity,avg_entry_price,locked_collateral,opened_at,updated_at)
                 VALUES(?,?,?,?,?,?) ON CONFLICT(symbol) DO UPDATE SET quantity=excluded.quantity,
                 avg_entry_price=excluded.avg_entry_price,locked_collateral=excluded.locked_collateral,updated_at=excluded.updated_at''',
