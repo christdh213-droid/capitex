@@ -410,7 +410,7 @@ def backtest_bulk(req: BulkBacktestRequest) -> Dict[str, Any]:
 
 # CAPITEX v3 routes. Legacy prototype endpoints above remain backward compatible.
 from typing import Literal
-from pydantic import ConfigDict, field_validator, model_validator
+from pydantic import ConfigDict, StrictInt, field_validator, model_validator
 from fastapi import Query
 from threading import RLock
 from time import monotonic
@@ -422,7 +422,15 @@ from market_calendar import completed_history
 from frozen_forecast import load_frozen
 
 
-class CapitexOrder(BaseModel):
+class ThesisFields(BaseModel):
+    model_config=ConfigDict(extra='forbid',allow_inf_nan=False)
+    forecast_log_ids:Optional[List[StrictInt]|Dict[str,StrictInt]]=None
+    selected_horizon:Optional[StrictInt]=None
+    context_summary_id:Optional[StrictInt]=None
+    prepared_at:Optional[str]=None
+
+
+class CapitexOrder(ThesisFields):
     model_config=ConfigDict(extra='forbid',allow_inf_nan=False)
     ticker:str=Field(min_length=1,max_length=25)
     action:Literal['BUY','SELL','SHORT_OPEN','SHORT_COVER']
@@ -602,7 +610,7 @@ def capitex_report_card(symbol:Optional[str]=None,asset_type:Optional[Literal['s
     except ValueError as exc:raise HTTPException(400,str(exc)) from exc
 
 
-class ShortOrder(BaseModel):
+class ShortOrder(ThesisFields):
     model_config=ConfigDict(extra='forbid',allow_inf_nan=False)
     symbol:str=Field(min_length=1,max_length=25)
     quantity:float=Field(gt=0,le=1e12)
@@ -611,9 +619,26 @@ class ShortOrder(BaseModel):
 
 @app.post('/api/short/open',tags=['CAPITEX Wallet'])
 def capitex_short_open(order:ShortOrder):
-    return capitex_trade(CapitexOrder(ticker=order.symbol,action='SHORT_OPEN',quantity=order.quantity,client_order_id=order.client_order_id))
+    values=order.model_dump();values['ticker']=values.pop('symbol')
+    return capitex_trade(CapitexOrder(action='SHORT_OPEN',**values))
 
 
 @app.post('/api/short/cover',tags=['CAPITEX Wallet'])
 def capitex_short_cover(order:ShortOrder):
-    return capitex_trade(CapitexOrder(ticker=order.symbol,action='SHORT_COVER',quantity=order.quantity,client_order_id=order.client_order_id))
+    values=order.model_dump();values['ticker']=values.pop('symbol')
+    return capitex_trade(CapitexOrder(action='SHORT_COVER',**values))
+
+
+class ShortPreview(BaseModel):
+    model_config=ConfigDict(extra='forbid',allow_inf_nan=False)
+    symbol:str=Field(min_length=1,max_length=25)
+    quantity:float=Field(gt=0,le=1e12)
+    entry_price:float=Field(gt=0,le=1e12)
+    pct_move:float=Field(ge=-30,le=120)
+
+
+@app.post('/api/short-preview',tags=['CAPITEX Wallet'])
+def capitex_short_preview(order:ShortPreview):
+    from short_preview import preview
+    try:return preview(**order.model_dump())
+    except ValueError as exc:raise HTTPException(400,str(exc)) from exc

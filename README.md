@@ -199,3 +199,58 @@ its fill source and idempotency metadata. Startup adds `short_positions` without
 resetting existing records. Wallet reset clears shorts as well as longs.
 
 Run isolated tests: `python -m unittest test_short_selling.ShortTests -v`.
+
+## Forward forecast tracking and sourced context
+
+The Analyzer loads existing trained weights and their original scalers without
+retraining. Keep the existing ticker model files in `models/`; a missing frozen
+model produces a clear error. Every completed daily bar/model version has one
+persisted forecast for each 1-, 7- and 30-day horizon. Refreshes render that same
+stored corridor rather than resampling it. US targets follow XNYS holidays and
+early closes; crypto daily bars end at 23:59:59 UTC.
+
+**Market context behind this outlook** shows provider headlines, source links,
+plain-English interpretations and counter-evidence. This context does not explain
+the LSTM's internal weights. Provider titles/snippets are the only article content
+used. News refetches after 15 minutes; summaries expire after 30 minutes and are
+retained for old orders. With no keys, yfinance and deterministic formatting work
+as the fallback; missing provider evidence is stated explicitly.
+
+Optional process environment variables (do not commit API keys):
+
+| Variable | Default / purpose |
+| --- | --- |
+| `FINNHUB_API_KEY` | Optional primary stock/crypto news provider |
+| `OPENAI_API_KEY` | Optional grounded summary generation; single 10-second attempt |
+| `CAPITEX_LLM_MODEL` | `gpt-4o-mini` |
+| `CAPITEX_GRADER_INTERVAL_SEC` | `900` seconds between background grading passes |
+| `CAPITEX_DISABLE_BACKGROUND_GRADER` | Set `1` for tests; otherwise startup catch-up and periodic grading run |
+
+In AI Predictor, select **Prediction Report Card** for forward outcomes, filters
+and the persistence baseline. `GET /api/report-card` accepts optional `symbol`,
+`asset_type=stock|crypto`, and `horizon=1|7|30`. Only exact completed target bars
+are graded, after a 30-minute stock buffer or the next UTC date for crypto. Split
+windows and bars missing beyond the grace period are marked unavailable. Pooled
+results show MAPE; dollar MAE/RMSE require a symbol filter. Small samples and
+overlapping forecasts are disclosed.
+
+**Prepare long order** / **Prepare short order** attach server-owned forecast and
+context IDs to a ticket. On execution the server saves an immutable thesis in the
+same wallet transaction; History displays it independently of later cache changes.
+Trade endpoints accept optional `forecast_log_ids` (list or horizon map),
+`selected_horizon`, `context_summary_id`, and `prepared_at` in UTC. They reject
+missing IDs, symbol mismatches, mixed runs and arbitrary snapshot fields.
+
+The Short ticket's hypothetical slider previews collateral, P&L, ROI, liquidation
+and wallet equity. `POST /api/short-preview` accepts `symbol`, `quantity`,
+`entry_price`, `pct_move`; the UI ranges from -30 to +100%, and the API also accepts
+up to +120% for beyond-trigger checks. Preview is read-only. Quotes retain full
+precision; shared Decimal accounting rounds monetary cash flows half up to cents.
+Existing same-symbol shorts merge at weighted entry; the preview values that
+merged position. Other assets' prices are held constant. Actual orders always
+fetch a fresh execution quote.
+
+Upgrade verification: `python -m pytest -q`. All HTTP is blocked in pytest and
+temporary wallets/providers are injected. Three pre-existing training integration
+tests are retained but skipped; the old manual script that resets a real running
+wallet is excluded. See `ASSUMPTIONS.md` for conventions and checkpoint counts.

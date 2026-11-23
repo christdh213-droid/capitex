@@ -819,10 +819,15 @@ def _order_receipt(row, cash, replay=False):
 
 
 def execute_capitex_trade(ticker, action, *, amount=None, quantity=None, client_order_id=None,
-                          stop_loss_pct=None, take_profit_pct=None, reason=None):
+                          stop_loss_pct=None, take_profit_pct=None, reason=None,
+                          forecast_log_ids=None,selected_horizon=None,context_summary_id=None,prepared_at=None):
     """Atomic cash/quantity validation with fresh fills and idempotent client retries."""
+    import thesis
+    meta=thesis.metadata(forecast_log_ids,selected_horizon,context_summary_id,prepared_at)
     if action.upper() in ('SHORT_OPEN','SHORT_COVER'):
-        return execute_capitex_short(ticker,action.upper(),amount=amount,quantity=quantity,client_order_id=client_order_id)
+        return execute_capitex_short(ticker,action.upper(),amount=amount,quantity=quantity,client_order_id=client_order_id,
+                                    forecast_log_ids=forecast_log_ids,selected_horizon=selected_horizon,
+                                    context_summary_id=context_summary_id,prepared_at=prepared_at)
     ticker=data_loader._symbol(ticker)
     action=action.upper()
     if action not in ('BUY','SELL'): raise ValueError('Choose BUY or SELL.')
@@ -833,7 +838,9 @@ def execute_capitex_trade(ticker, action, *, amount=None, quantity=None, client_
     for pct in (stop_loss_pct,take_profit_pct):
         if pct is not None and (not math.isfinite(float(pct)) or not 0<float(pct)<=100):
             raise ValueError('Protection percentages must be in (0,100].')
-    fingerprint=hashlib.sha256(json.dumps([ticker,action,amount,quantity,stop_loss_pct,take_profit_pct],sort_keys=True).encode()).hexdigest()
+    fingerprint_values=[ticker,action,amount,quantity,stop_loss_pct,take_profit_pct]
+    if meta is not None:fingerprint_values.append(meta)
+    fingerprint=hashlib.sha256(json.dumps(fingerprint_values,sort_keys=True).encode()).hexdigest()
     def replay(conn):
         old=conn.execute('SELECT * FROM trade_ledger WHERE client_order_id=?',(client_order_id,)).fetchone() if client_order_id else None
         if old:
@@ -856,6 +863,8 @@ def execute_capitex_trade(ticker, action, *, amount=None, quantity=None, client_
         conn.execute('BEGIN IMMEDIATE')
         previous=replay(conn)
         if previous: return previous
+        executed_at=utc_z()
+        snapshot=thesis.build(conn,ticker,meta,executed_at)
         wallet=dict(conn.execute('SELECT * FROM wallet WHERE id=1').fetchone())
         cash=Decimal(str(wallet['cash']))
         existing=conn.execute('SELECT * FROM holdings WHERE ticker=?',(ticker,)).fetchone()
@@ -887,12 +896,13 @@ def execute_capitex_trade(ticker, action, *, amount=None, quantity=None, client_
             cash+=total
         conn.execute('UPDATE wallet SET cash=? WHERE id=1',(float(cash),))
         ledger_action=reason if action=='SELL' and reason in ('STOP_LOSS','TAKE_PROFIT') else action
-        now=utc_z()
+        now=executed_at
         cursor=conn.execute('''INSERT INTO trade_ledger(timestamp,ticker,action,quantity,price,total_value,realized_pnl,
                             execution_source,execution_label,quote_timestamp,client_order_id,order_fingerprint)
                             VALUES(?,?,?,?,?,?,?,?,?,?,?,?)''',
                             (now,ticker,ledger_action,float(qty),float(price),float(total),float(pnl),
                              execution['execution_source'],execution['execution_label'],(utc_z(execution['quote_timestamp']) if execution.get('quote_timestamp') else None),client_order_id,fingerprint))
+        conn.execute('UPDATE trade_ledger SET thesis_snapshot_json=? WHERE id=?',(snapshot,cursor.lastrowid))
         prices[ticker]=float(price)
         _liquidate_shorts(conn,prices)
         _capitex_snapshot(conn,prices,'trade')
@@ -934,48 +944,52 @@ def check_capitex_risk():
 
 def _short_close(conn, row, qty, execution, action, client_order_id=None, fingerprint=None):
     """Close within the caller's write transaction; loss is capped at collateral."""
-    price=float(execution['price'])
-    remaining=float(row['quantity'])-qty
-    if remaining < 1e-8:
-        qty=float(row['quantity']); remaining=0.
-    released=float(row['locked_collateral'])*qty/float(row['quantity'])
-    returned=max(0.,released+(float(row['avg_entry_price'])-price)*qty)
-    if action=='SHORT_LIQUIDATED': returned=0.
-    pnl=returned-released
-    if remaining==0:
+    from short_accounting import calculate,dec,money
+    result=calculate(action,qty,execution['price'],row)
+    if result['remaining_quantity']==0:
         conn.execute('DELETE FROM short_positions WHERE symbol=?',(row['symbol'],))
     else:
         conn.execute('UPDATE short_positions SET quantity=?,locked_collateral=?,updated_at=? WHERE symbol=?',
-                     (remaining,max(0.,row['locked_collateral']-released),utc_z(),row['symbol']))
-    conn.execute('UPDATE wallet SET cash=cash+? WHERE id=1',(returned,))
-    return _short_ledger(conn,row['symbol'],action,qty,execution,pnl,client_order_id,fingerprint)
+                     (float(result['remaining_quantity']),float(result['locked_collateral']),utc_z(),row['symbol']))
+    cash=dec(conn.execute('SELECT cash FROM wallet WHERE id=1').fetchone()[0])
+    conn.execute('UPDATE wallet SET cash=? WHERE id=1',(float(money(cash+result['cash_delta'])),))
+    return _short_ledger(conn,row['symbol'],result['action'],float(result['quantity']),execution,
+                         float(result['realized_pnl']),client_order_id,fingerprint)
 
 
 def _short_ledger(conn,ticker,action,qty,execution,pnl=0.,client_order_id=None,fingerprint=None):
+    from short_accounting import money,dec
     cursor=conn.execute('''INSERT INTO trade_ledger(timestamp,ticker,action,quantity,price,total_value,realized_pnl,
         execution_source,execution_label,quote_timestamp,client_order_id,order_fingerprint) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)''',
-        (utc_z(),ticker,action,qty,execution['price'],qty*execution['price'],pnl,
-         execution['execution_source'],execution['execution_label'],execution.get('quote_timestamp'),client_order_id,fingerprint))
+        (utc_z(),ticker,action,qty,execution['price'],float(money(dec(qty)*dec(execution['price']))),pnl,
+         execution['execution_source'],execution['execution_label'],utc_z(execution['quote_timestamp']) if execution.get('quote_timestamp') else None,client_order_id,fingerprint))
     return dict(conn.execute('SELECT * FROM trade_ledger WHERE id=?',(cursor.lastrowid,)).fetchone())
 
 
 def _liquidate_shorts(conn,prices):
+    from short_accounting import calculate
     for row in conn.execute('SELECT * FROM short_positions').fetchall():
         price=prices.get(row['symbol'])
-        if price is not None and price>=2*row['avg_entry_price']:
+        if price is not None and calculate('SHORT_COVER',row['quantity'],price,row)['would_liquidate']:
             execution=dict(price=price,execution_source='market_quote',execution_label='Refresh quote: collateral liquidation',
                            quote_timestamp=utc_z())
             _short_close(conn,row,row['quantity'],execution,'SHORT_LIQUIDATED')
             _capitex_snapshot(conn,prices,'liquidation')
 
 
-def execute_capitex_short(ticker,action,*,quantity=None,amount=None,client_order_id=None):
+def execute_capitex_short(ticker,action,*,quantity=None,amount=None,client_order_id=None,
+                          forecast_log_ids=None,selected_horizon=None,context_summary_id=None,prepared_at=None):
+    import thesis
+    from short_accounting import calculate,dec,money
+    meta=thesis.metadata(forecast_log_ids,selected_horizon,context_summary_id,prepared_at)
     ticker=data_loader._symbol(ticker)
     if action not in ('SHORT_OPEN','SHORT_COVER'): raise ValueError('Invalid short action.')
     if (amount is None)==(quantity is None): raise ValueError('Provide exactly one amount or quantity.')
     value=amount if amount is not None else quantity
     if isinstance(value,bool) or not math.isfinite(float(value)) or float(value)<=0: raise ValueError('Order size must be finite and positive.')
-    fingerprint=hashlib.sha256(json.dumps([ticker,action,amount,quantity]).encode()).hexdigest()
+    fingerprint_values=[ticker,action,amount,quantity]
+    if meta is not None:fingerprint_values.append(meta)
+    fingerprint=hashlib.sha256(json.dumps(fingerprint_values,sort_keys=True).encode()).hexdigest()
     def replay(conn):
         old=conn.execute('SELECT * FROM trade_ledger WHERE client_order_id=?',(client_order_id,)).fetchone() if client_order_id else None
         if old:
@@ -999,28 +1013,25 @@ def execute_capitex_short(ticker,action,*,quantity=None,amount=None,client_order
         conn.execute('BEGIN IMMEDIATE')
         previous=replay(conn)
         if previous:return previous
+        executed_at=utc_z()
+        snapshot=thesis.build(conn,ticker,meta,executed_at)
         row=conn.execute('SELECT * FROM short_positions WHERE symbol=?',(ticker,)).fetchone()
-        cash=conn.execute('SELECT cash FROM wallet WHERE id=1').fetchone()[0]
+        cash=dec(conn.execute('SELECT cash FROM wallet WHERE id=1').fetchone()[0])
         if action=='SHORT_OPEN':
-            collateral=qty*price
-            if not math.isfinite(collateral) or collateral>cash: raise ValueError('Insufficient available cash for 1x short collateral.')
-            if row and price>=2*row['avg_entry_price']: raise ValueError('Position reached liquidation. Refresh the wallet before opening another short.')
-            old_qty=row['quantity'] if row else 0.
-            total_qty=old_qty+qty
-            avg=((old_qty*row['avg_entry_price'] if row else 0.)+collateral)/total_qty
-            locked=(row['locked_collateral'] if row else 0.)+collateral
-            now=utc_z()
+            result=calculate('SHORT_OPEN',qty,price,row)
+            if result['required_collateral']>cash: raise ValueError('Insufficient available cash for 1x short collateral.')
+            now=executed_at
             conn.execute('''INSERT INTO short_positions(symbol,quantity,avg_entry_price,locked_collateral,opened_at,updated_at)
                 VALUES(?,?,?,?,?,?) ON CONFLICT(symbol) DO UPDATE SET quantity=excluded.quantity,
                 avg_entry_price=excluded.avg_entry_price,locked_collateral=excluded.locked_collateral,updated_at=excluded.updated_at''',
-                (ticker,total_qty,avg,locked,now,now))
-            conn.execute('UPDATE wallet SET cash=? WHERE id=1',(max(0.,cash-collateral),))
+                (ticker,float(result['remaining_quantity']),float(result['avg_entry_price']),float(result['locked_collateral']),now,now))
+            conn.execute('UPDATE wallet SET cash=? WHERE id=1',(float(money(cash+result['cash_delta'])),))
             receipt=_short_ledger(conn,ticker,action,qty,execution,0.,client_order_id,fingerprint)
         else:
             if row is None or qty>row['quantity']: raise ValueError('Cover quantity exceeds the open short position.')
-            if price>=2*row['avg_entry_price']:
-                qty=row['quantity']; action='SHORT_LIQUIDATED'
             receipt=_short_close(conn,row,qty,execution,action,client_order_id,fingerprint)
+        conn.execute('UPDATE trade_ledger SET thesis_snapshot_json=?,timestamp=? WHERE id=?',(snapshot,executed_at,receipt['id']))
+        receipt=dict(conn.execute('SELECT * FROM trade_ledger WHERE id=?',(receipt['id'],)).fetchone())
         _liquidate_shorts(conn,prices)
         _capitex_snapshot(conn,prices,'trade')
         cash=conn.execute('SELECT cash FROM wallet WHERE id=1').fetchone()[0]

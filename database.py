@@ -96,7 +96,7 @@ def init_db(db_path: Path | None = None):
             'trade_ledger': {'execution_source': "TEXT DEFAULT 'legacy'",
                              'execution_label': "TEXT DEFAULT 'Historical fill'",
                              'quote_timestamp': 'TEXT', 'client_order_id': 'TEXT',
-                             'order_fingerprint': 'TEXT'},
+                             'order_fingerprint': 'TEXT', 'thesis_snapshot_json': 'TEXT'},
             'portfolio_snapshots': {'reason': "TEXT NOT NULL DEFAULT 'event'"},
         }.items():
             present = {row[1] for row in conn.execute(f'PRAGMA table_info({table})')}

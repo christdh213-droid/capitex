@@ -2,6 +2,8 @@
 from html import escape
 from pathlib import Path
 import uuid
+import json
+from time_utils import utc_z
 from time import monotonic
 import pandas as pd
 import requests
@@ -43,11 +45,13 @@ def open_asset(ticker,action=None):
     st.session_state.order_action=action
     st.session_state.order_size=0.
     st.session_state.pop('pending_order',None)
+    st.session_state.pop('pending_thesis',None)
 
 
 def go_home():
     st.session_state.view='home'
     st.session_state.order_action=None
+    st.session_state.pop('pending_thesis',None)
 
 
 def choose_assets(action):
@@ -181,6 +185,9 @@ def render_order(asset):
             if st.button('✕',key='close_order',help='Close order card',width='stretch'):
                 st.session_state.order_action=None;st.rerun()
         caption(f"Available cash {money(asset['cash'])} · You own {quantity:,.6f} {asset['ticker']}")
+        prepared=st.session_state.get('pending_thesis')
+        linked=prepared if prepared and prepared['symbol']==asset['ticker'] and prepared['trade_side']==action else None
+        if linked:caption('Saved outlook attached · Prepared '+local_timestamp(linked['prepared_at']))
         if action.startswith('SHORT'):
             caption('Profits when price drops · 1x collateral locked. Auto-liquidation at 2x entry on refresh. No borrowing fees in this simulation.')
         unit_default={} if 'order_unit' in st.session_state else {'default':'Dollar Amount'}
@@ -194,7 +201,23 @@ def render_order(asset):
             format='%.2f' if unit=='Dollar Amount' else '%.8f',key='order_size')
         estimate=size if unit=='Dollar Amount' else size*price
         st.markdown(f'<p class="caption">Estimated {"cost" if action=="BUY" else "proceeds"}: <b>{money(estimate)}</b> · Fill uses a fresh market quote.</p>',unsafe_allow_html=True)
-        if action=='SHORT_OPEN': caption(f'Required collateral (estimate): {money(estimate)}')
+        if action=='SHORT_OPEN':
+            caption(f'Required collateral (estimate): {money(estimate)}')
+            if 'short_preview_move' not in st.session_state:st.session_state.short_preview_move=0
+            move=st.slider('Hypothetical price move (%)',-30,100,key='short_preview_move')
+            if size>0:
+                try:
+                    preview=api('POST','/api/short-preview',dict(symbol=asset['ticker'],quantity=size/price if unit=='Dollar Amount' else size,
+                        entry_price=price,pct_move=move))
+                    cols=st.columns(2)
+                    with cols[0]:st.metric('Simulated price',money(preview['simulated_price']))
+                    with cols[1]:st.metric('Projected short P&L',signed_money(preview['projected_unrealized_pnl']))
+                    caption(f"Required collateral {money(preview['required_collateral'])} · ROI {preview['projected_roi_pct']:+.2f}% · Liquidation price {money(preview['liquidation_price'])}")
+                    caption(f"Projected total equity {money(preview['projected_total_equity'])}")
+                    if preview['would_liquidate']:st.warning('This scenario reaches liquidation. Loss is capped at locked collateral.')
+                    if preview.get('valuation_estimated'):caption('Some other positions use entry/cost estimates because their quotes are unavailable.')
+                except RuntimeError as exc:st.warning('Preview: '+str(exc))
+            caption('Projected total equity holds all other asset prices constant.')
         with st.expander('Position protection',expanded=False):
             protect=st.checkbox('Set trailing stop and take profit for this purchase',value=False,disabled=action!='BUY')
             if protect and action=='BUY':
@@ -203,17 +226,20 @@ def render_order(asset):
             else: sl=tp=None
         if action in ('SELL','SHORT_COVER') and quantity<=0: st.info('You do not own this asset yet.')
         if st.button(f"Confirm {action.lower().replace('_',' ')}",type='primary',width='stretch',disabled=size<=0 or (action in ('SELL','SHORT_COVER') and quantity<=0),key='execute_order'):
-            fingerprint=(asset['ticker'],action,unit,size,sl,tp)
+            metadata={k:linked[k] for k in ('forecast_log_ids','selected_horizon','context_summary_id','prepared_at')} if linked else {}
+            fingerprint=(asset['ticker'],action,unit,size,sl,tp,json.dumps(metadata,sort_keys=True))
             pending=st.session_state.get('pending_order')
             if not pending or pending['fingerprint']!=fingerprint:
                 pending={'fingerprint':fingerprint,'id':str(uuid.uuid4())}
                 st.session_state.pending_order=pending
             payload={'ticker':asset['ticker'],'action':action,'amount' if unit=='Dollar Amount' else 'quantity':size,
                      'client_order_id':pending['id'],'stop_loss_pct':sl,'take_profit_pct':tp}
+            payload.update(metadata)
             result=api('POST','/api/trade',payload)
             fill=result['trade']
             st.session_state.flash=f"{action} complete · {fill['quantity']:,.8f} {fill['ticker']} at {money(fill['price'])} · {fill['execution_label']}"
             st.session_state.pop('pending_order',None)
+            st.session_state.pop('pending_thesis',None)
             st.session_state.order_action=None
             st.rerun()
 
@@ -280,6 +306,23 @@ def render_history(wallet):
                 label={'SHORT_OPEN':'SHORT','SHORT_COVER':'COVER','SHORT_LIQUIDATED':'LIQUIDATED'}[r['action']]
                 st.markdown(f'<span style="color:{color}">{label} · {escape(r["ticker"])} · {signed_money(r["realized_pnl"])}</span>',unsafe_allow_html=True)
         st.dataframe(pd.DataFrame(rows),hide_index=True,width='stretch')
+        for row in wallet['trade_ledger']:
+            if not row.get('thesis_snapshot_json'):continue
+            saved=json.loads(row['thesis_snapshot_json'])
+            with st.expander(f"Saved outlook · #{row['id']} {row['action']} {row['ticker']}",expanded=False):
+                caption(f"Prepared {local_timestamp(saved['prepared_at'])} · Executed {local_timestamp(saved['executed_at'])} · Selected horizon {saved.get('selected_horizon')} day(s)")
+                for bullet in saved['bullets']:
+                    st.text('• '+bullet['verified_event'])
+                    if bullet.get('possible_implication'):caption('Interpretation, not reported fact: '+bullet['possible_implication'])
+                    st.link_button(bullet['publisher']+' · '+local_timestamp(bullet['published_at']),bullet['url'])
+                st.markdown('**What could challenge this outlook?**')
+                counter=saved['counter_thesis']
+                caption(counter.get('signal_note','No independent counter-evidence available.'))
+                for signal in counter.get('signals',[]):caption(signal['label'])
+                for bullet in counter.get('articles',[]):
+                    st.text(bullet['verified_event']);st.link_button(bullet['publisher'],bullet['url'])
+                st.dataframe(pd.DataFrame([{'Horizon':r['horizon'],'Target time':local_timestamp(r['target_timestamp']),
+                    'Target price':money(r['predicted_price']),'Lower':money(r['band_low']),'Upper':money(r['band_high'])} for r in saved['forecasts']]),hide_index=True,width='stretch')
     else: st.info('Your completed trades will appear here.')
     with st.expander('Position protection',expanded=False):
         caption('Refreshes update trailing peaks. Run this check to execute any active stop-loss or take-profit rules.')
@@ -292,6 +335,15 @@ def render_history(wallet):
 def trade_prediction(ticker):
     st.session_state.main_navigation='👛 Wallet'
     open_asset(ticker,'BUY')
+
+
+def prepare_order(ticker,action,payload,selected):
+    # Callback runs before the next script pass instantiates ticket widgets.
+    st.session_state.main_navigation='👛 Wallet'
+    open_asset(ticker,action)
+    st.session_state.pending_thesis=dict(symbol=ticker,trade_side=action,
+        forecast_log_ids=payload.get('forecast_log_ids',{}),selected_horizon=selected,
+        context_summary_id=payload.get('context_summary_id'),prepared_at=utc_z())
 
 
 def clear_prediction():
@@ -498,8 +550,12 @@ def render_predictor():
         caption(f"As of {local_timestamp(payload.get('forecast_as_of',quote['timestamp']))} · Estimated 80% range · Certainty is a model score, not a success probability.")
         with st.expander('🔍 Market context behind this outlook',expanded=False):
             render_reasoning(payload['why'])
-        st.button(f'Trade {ticker} in CAPITEX Wallet →',key='trade_prediction',width='stretch',
-            type='primary',on_click=trade_prediction,args=(ticker,))
+            long,short=st.columns(2)
+            selected_days={'24h':1,'7d':7,'30d':30}[horizon]
+            with long:st.button('Prepare long order',key='trade_prediction',width='stretch',
+                type='primary',on_click=prepare_order,args=(ticker,'BUY',payload,selected_days))
+            with short:st.button('Prepare short order',key='prepare_short_order',width='stretch',
+                on_click=prepare_order,args=(ticker,'SHORT_OPEN',payload,selected_days))
     except (RuntimeError,ValueError,KeyError) as exc:
         st.error(str(exc) if isinstance(exc,RuntimeError) else 'The outlook is incomplete. Please refresh it in a moment.')
         caption('Choose another market or use Refresh outlook to try again.')
