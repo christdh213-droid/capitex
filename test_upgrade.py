@@ -33,6 +33,7 @@ def test_migrate_populated_twice(db):
     copy=db.with_name('populated_copy.db')
     with sqlite3.connect(db) as source,sqlite3.connect(copy) as target:source.backup(target)
     with sqlite3.connect(copy) as target:target.execute('ALTER TABLE trade_ledger DROP COLUMN thesis_snapshot_json')
+    with sqlite3.connect(copy) as target:target.execute('ALTER TABLE context_summary_cache DROP COLUMN technical_summary_text')
     database.init_db(copy);database.init_db(copy)
     with database.get_connection(copy) as c:
         assert c.execute('SELECT cash FROM wallet').fetchone()[0]==12345
@@ -148,6 +149,9 @@ def test_context_show_more_ui():
             page.session_state['main_navigation']='🧠 AI Predictor';page.run(timeout=60)
             assert not page.exception
             assert len(page.text)==3
+            raw=next(item for item in page.expander if item.label=='Show raw technical indicators')
+            assert not raw.proto.expanded
+            assert any('broader price trend' in item.value for item in page.markdown)
             page.toggle(key='context_show_more_777').set_value(True).run(timeout=60)
             assert len(page.text)==4 and not page.exception
     finally:env.tearDown()
@@ -308,9 +312,11 @@ def test_thesis_atomic_validation_and_immutable_snapshot(db,monkeypatch,action):
         assert response.status_code==200,response.text
         trade=response.json()['trade'];saved=trade['thesis_snapshot_json'];snapshot=json.loads(saved)
         assert snapshot['bullets']==context['bullets'] and snapshot['forecasts'][0]['id']==rowid
+        assert snapshot['technical_summary_text']==context['technical_summary_text']
         assert snapshot['prepared_at']=='2026-11-23T12:00:00Z' and snapshot['executed_at']==trade['timestamp']
         with database.get_connection() as conn:
             conn.execute("UPDATE context_summary_cache SET bullets_json='[]',is_stale=1")
+            conn.execute("UPDATE context_summary_cache SET technical_summary_text='Changed later'")
             conn.execute('UPDATE forecast_logs SET predicted_price=999 WHERE id=?',(rowid,))
         replay=client.post('/api/trade',json={**base,'client_order_id':'thesis-valid-once'}).json()['trade']
         assert replay['replayed'] and replay['thesis_snapshot_json']==saved

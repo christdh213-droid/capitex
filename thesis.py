@@ -39,15 +39,16 @@ def build(conn,symbol,meta,executed_at):
     if selected is not None and (isinstance(selected,bool) or selected not in (1,7,30) or
                                 not any(r['horizon']==selected for r in forecasts)):
         raise ValueError('Selected horizon must reference a supplied forecast.')
-    summary_id=meta.get('context_summary_id');bullets=[];counter={}
+    summary_id=meta.get('context_summary_id');bullets=[];counter={};technical_text=''
     if summary_id is not None:
         if isinstance(summary_id,bool) or not isinstance(summary_id,int) or summary_id<=0:raise ValueError('Invalid context summary ID.')
         row=conn.execute('SELECT * FROM context_summary_cache WHERE id=?',(summary_id,)).fetchone()
         if row is None or row['symbol']!=symbol:raise ValueError('Context summary ID is missing or belongs to another symbol.')
         bullets=json.loads(row['bullets_json']);counter=json.loads(row['counter_thesis_json'])
+        technical_text=row['technical_summary_text']
     try:prepared=utc_z(meta['prepared_at']) if meta.get('prepared_at') else executed_at
     except Exception as exc:raise ValueError('Invalid prepared_at timestamp.') from exc
     snapshot=dict(symbol=symbol,prepared_at=prepared,executed_at=executed_at,
-        context_summary_id=summary_id,bullets=bullets,counter_thesis=counter,
+        context_summary_id=summary_id,bullets=bullets,counter_thesis=counter,technical_summary_text=technical_text,
         forecasts=forecasts,selected_horizon=selected)
     return json.dumps(snapshot,sort_keys=True,allow_nan=False)

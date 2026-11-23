@@ -12,6 +12,7 @@ import branding
 import chart_plotter
 import config
 import academic
+from indicators import technical_takeaway
 from formatting import signed_money, local_timestamp, performance_text
 
 st.set_page_config(page_title='CAPITEX',page_icon=str(config.LOGO_PATH),layout='wide',initial_sidebar_state='collapsed')
@@ -311,6 +312,7 @@ def render_history(wallet):
             saved=json.loads(row['thesis_snapshot_json'])
             with st.expander(f"Saved outlook · #{row['id']} {row['action']} {row['ticker']}",expanded=False):
                 caption(f"Prepared {local_timestamp(saved['prepared_at'])} · Executed {local_timestamp(saved['executed_at'])} · Selected horizon {saved.get('selected_horizon')} day(s)")
+                if saved.get('technical_summary_text'):st.markdown(escape(saved['technical_summary_text']))
                 for bullet in saved['bullets']:
                     st.text('• '+bullet['verified_event'])
                     if bullet.get('possible_implication'):caption('Interpretation, not reported fact: '+bullet['possible_implication'])
@@ -430,6 +432,17 @@ def render_reasoning(why):
         st.link_button(bullet['publisher']+' · '+local_timestamp(bullet['published_at']),bullet['url'])
     caption(f"{context.get('headline_count',0)} recent headlines included")
     st.markdown('**Price & Technical Signals**')
+    takeaway=context.get('technical_summary_text') or technical_takeaway(why.get('technical_summary',{}))
+    st.markdown(f'<div class="reason-block">{escape(takeaway)}</div>',unsafe_allow_html=True)
+    with st.expander('Show raw technical indicators',expanded=False):
+        tags=why.get('technical_summary',{}).get('tags',[])
+        badges=[]
+        for tag in tags:
+            tone=tag.get('tone','neutral')
+            tone=tone if tone in ('bullish','bearish','neutral','caution') else 'neutral'
+            badges.append(f'<span class="factor-pill {tone}">{escape(tag["label"])}</span>')
+        if badges:st.markdown('<div class="factor-pills">'+''.join(badges)+'</div>',unsafe_allow_html=True)
+        else:caption('Technical readings are temporarily unavailable.')
     sentiment=why.get('sentiment',{})
     score=max(0,min(100,float(sentiment.get('score',50))))
     label=escape(sentiment.get('label','Neutral'))
@@ -439,7 +452,6 @@ def render_reasoning(why):
         <div class="sentiment-labels"><span>Fear</span><span>Neutral</span><span>Greed</span></div></div>''',unsafe_allow_html=True)
     caption(f"CAPITEX sentiment blend · {sentiment.get('headlines_used',0)} recent headlines included. Missing sources are omitted.")
     for heading,tags,empty in [
-        ('Technical summary',why.get('technical_summary',{}).get('tags',[]),'Technical readings are temporarily unavailable.'),
         ('Catalysts to watch',why.get('catalyst_tags',[]),'No verified near-term catalysts found.')]:
         st.markdown(f'<div class="reason-title">{heading}</div>',unsafe_allow_html=True)
         if tags:

@@ -93,6 +93,7 @@ def init_db(db_path: Path | None = None):
         conn.execute('CREATE INDEX IF NOT EXISTS context_lookup ON context_summary_cache(symbol,evidence_hash,expires_at)')
         conn.execute('CREATE INDEX IF NOT EXISTS forecast_pending ON forecast_logs(status,target_timestamp,symbol)')
         for table, additions in {
+            'context_summary_cache': {'technical_summary_text': "TEXT NOT NULL DEFAULT ''"},
             'trade_ledger': {'execution_source': "TEXT DEFAULT 'legacy'",
                              'execution_label': "TEXT DEFAULT 'Historical fill'",
                              'quote_timestamp': 'TEXT', 'client_order_id': 'TEXT',

@@ -535,7 +535,7 @@ def capitex_predict(ticker:str,horizon:str='7d'):
         articles=market_context.get_articles(ticker)
         news=[{'content':{'title':a['title'],'pubDate':a['published_at']}} for a in articles]
         why=reasoning_engine.build_reasoning(ticker,history,news=news,calendar={},fetch_context=False)
-        context=market_context.get_context(ticker,signals=why.get('technical_summary',{}).get('tags',[]))
+        context=market_context.get_context(ticker,signals=why.get('technical_summary',{}).get('tags',[]),technical=why.get('technical_summary',{}))
         why['market_context']=context
         why.setdefault('sentiment',{})['headlines_used']=context['headline_count']
         return dict(forecast,hero={k:forecast[k] for k in

@@ -9,6 +9,7 @@ import requests
 from news_provider import yahoo_news
 from news_entities import relevance
 import config,database
+from indicators import technical_takeaway
 from market_calendar import asset_type
 from time_utils import now_utc,utc_z
 
@@ -139,9 +140,12 @@ def _hydrate(bullets,articles):
     byid={r['id']:r for r in articles}
     return [{**b,**{k:byid[b['article_id']][k] for k in ['publisher','published_at','url']}} for b in bullets]
 
-def get_context(symbol,now=None,providers=None,llm_call=None,signals=None):
+def get_context(symbol,now=None,providers=None,llm_call=None,signals=None,technical=None):
     now=pd.Timestamp(now or now_utc());articles=get_articles(symbol,now,providers)
-    evidence_hash=hashlib.sha256((''.join(sorted(r['content_hash'] for r in articles))+PROMPT_VERSION).encode()).hexdigest()
+    technical=technical if technical is not None else {'tags':signals or []}
+    technical_text=technical_takeaway(technical)
+    technical_key=json.dumps(technical,sort_keys=True,allow_nan=False)
+    evidence_hash=hashlib.sha256((''.join(sorted(r['content_hash'] for r in articles))+PROMPT_VERSION+technical_key+technical_text).encode()).hexdigest()
     with _LOCKS[hash(symbol)%len(_LOCKS)]:
         with database.get_connection() as conn:
             conn.execute('UPDATE context_summary_cache SET is_stale=1 WHERE expires_at<=?',(utc_z(now),))
@@ -168,11 +172,11 @@ def get_context(symbol,now=None,providers=None,llm_call=None,signals=None):
         counter_payload={'articles':_hydrate(counter,articles),'signals':observed,
                          'signal_note':'The price signals listed below can change or disagree with this outlook. Recheck them before acting.' if observed else 'No independent counter-evidence is available. The outlook may still be wrong.'}
         with database.get_connection() as conn:
-            rowid=conn.execute('''INSERT INTO context_summary_cache(symbol,evidence_hash,bullets_json,counter_thesis_json,headline_count,model_used,generated_at,expires_at,is_stale)
-                VALUES(?,?,?,?,?,?,?,?,0)''',(symbol,evidence_hash,json.dumps(hydrated),json.dumps(counter_payload),len(articles),model,utc_z(now),utc_z(now+timedelta(minutes=30)))).lastrowid
+            rowid=conn.execute('''INSERT INTO context_summary_cache(symbol,evidence_hash,bullets_json,counter_thesis_json,headline_count,model_used,generated_at,expires_at,is_stale,technical_summary_text)
+                VALUES(?,?,?,?,?,?,?,?,0,?)''',(symbol,evidence_hash,json.dumps(hydrated),json.dumps(counter_payload),len(articles),model,utc_z(now),utc_z(now+timedelta(minutes=30)),technical_text)).lastrowid
             row=dict(conn.execute('SELECT * FROM context_summary_cache WHERE id=?',(rowid,)).fetchone())
         return _summary(row)
 
 def _summary(row):
     return dict(context_summary_id=row['id'],bullets=json.loads(row['bullets_json']),counter_thesis=json.loads(row['counter_thesis_json']),
-                headline_count=row['headline_count'],model_used=row['model_used'],generated_at=row['generated_at'],is_stale=bool(row['is_stale']))
+                headline_count=row['headline_count'],model_used=row['model_used'],generated_at=row['generated_at'],is_stale=bool(row['is_stale']),technical_summary_text=row['technical_summary_text'])

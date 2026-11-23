@@ -227,6 +227,13 @@ asset excludes incidental target mentions confined to its snippet. Existing cach
 articles are rechecked against the same gate. Company names come from the existing
 asset metadata, with a cached Yahoo metadata lookup for unconfigured tickers.
 
+Price & Technical Signals leads with a deterministic two-sentence explanation of
+trend/momentum, price-pattern alignment, stretched moves and price-swing risk.
+The existing colored pills remain under the collapsed **Show raw technical
+indicators** drawer. The takeaway is stored in context summaries and copied into
+trade theses; indicator changes invalidate the summary cache even when headlines
+stay unchanged. Technical wording does not require an LLM or explain LSTM weights.
+
 Optional process environment variables (do not commit API keys):
 
 | Variable | Default / purpose |

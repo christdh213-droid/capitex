@@ -329,6 +329,33 @@ def stationary_features(df: pd.DataFrame) -> pd.DataFrame:
     return features.replace([np.inf, -np.inf], np.nan).dropna()
 
 
+def technical_takeaway(technical: dict) -> str:
+    """Two deterministic sentences from computed states; no forecast or news claims."""
+    values=technical.get('values',{})
+    tags={t['label'].split(':',1)[0]:t for t in technical.get('tags',[]) if ':' in t.get('label','')}
+    def direction(key,number=None):
+        if number is not None and np.isfinite(number):return 'bullish' if number>0 else 'bearish' if number<0 else 'neutral'
+        return tags.get(key,{}).get('tone','neutral')
+    close=values.get('Close');sma=values.get('SMA_50')
+    trend=direction('Trend',close-sma if close is not None and sma is not None else None)
+    momentum=direction('MACD',values.get('MACD_Hist'))
+    fast=values.get('EMA_12');slow=values.get('EMA_26')
+    alignment=direction('Moving Average',fast-slow if fast is not None and slow is not None else None)
+    first={'bullish':'The broader price trend leans upward','bearish':'The broader price trend leans downward','neutral':'The broader price trend is unclear'}[trend]
+    first+=', '+{'bullish':'recent momentum favors rising prices','bearish':'recent momentum favors falling prices','neutral':'recent momentum has no clear direction'}[momentum]
+    first+=', and '+{'bullish':'shorter-term price patterns also point upward','bearish':'shorter-term price patterns also point downward','neutral':'shorter-term price patterns are mixed'}[alignment]+'.'
+    rsi=values.get('RSI_14');rsi_label=tags.get('RSI',{}).get('label','').lower()
+    if rsi is not None and np.isfinite(rsi):stretch='low' if rsi<30 else 'high' if rsi>70 else 'normal'
+    else:stretch='low' if 'oversold' in rsi_label else 'high' if 'overbought' in rsi_label else 'normal' if 'neutral' in rsi_label else 'unknown'
+    second={'low':'The recent fall looks stretched but could continue','high':'The recent rise looks stretched and could pause or reverse',
+        'normal':'The recent move does not look unusually stretched','unknown':'There is not enough history to judge whether the recent move is stretched'}[stretch]
+    vol=tags.get('Volatility',{}).get('label','').lower()
+    second+='; '+('larger price swings increase the risk of sudden losses' if 'elevated' in vol else
+        'prices have been unusually quiet, but a sudden move is still possible' if 'squeeze' in vol else
+        'price swings are within their usual range' if 'normal' in vol else 'price-swing risk cannot yet be assessed')+'.'
+    return first+' '+second
+
+
 def technical_summary(df: pd.DataFrame) -> dict:
     """Human-readable colored tags and raw readings for the collapsed Why drawer."""
     frame = add_all_indicators(validate_daily_prices(df))
