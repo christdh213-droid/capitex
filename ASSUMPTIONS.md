@@ -25,3 +25,12 @@
 - Deterministic fallback quotes the headline and uses cautious keyword-category interpretations, or omits an implication. Counter-thesis uses cited articles and/or the stored computed technical tags; absence of evidence is stated explicitly.
 - UI shows up to three bullets initially, an ID-keyed session-state Show more toggle, source links and explicit interpretation labels. News is context, not LSTM attribution. API returns `context_summary_id`.
 - P1 verification: 114 passed, 3 skipped, 24 subtests passed (full offline pytest, 66.42 s), including Show more AppTest.
+
+## P3: target-aware grading and report card
+- Startup catch-up and periodic grading run in a background asyncio task; blocking provider work runs in `asyncio.to_thread`. The default interval is 900 seconds. `CAPITEX_DISABLE_BACKGROUND_GRADER=1` prevents task creation during tests. Wallet refresh does not run the grader.
+- One unadjusted daily OHLCV/actions fetch covers each symbol's due forecasts, with every SQLite connection closed before provider I/O. Conditional PENDING-only updates make repeated grading idempotent.
+- Stocks wait 30 minutes after the target session close; crypto waits until the next UTC date. Only the exact target-date daily bar is accepted, never a live or later quote. Split events in the forecast window make the outcome unavailable. Missing bars remain pending for five calendar days (stocks) or 48 hours (crypto).
+- Actual timestamps represent the target session close under the same calendar convention as issuance. Apparent intraday bars are rejected.
+- Report-card dollar MAE/RMSE require an explicit single-symbol filter. Pooled views expose MAPE, excluding zero actual prices from its denominator. Both models use the identical graded set. Actual flat ties are excluded from directional accuracy; a flat prediction against a non-flat actual counts as incorrect.
+- Coverage is labelled `Observed coverage of the estimated 80% interval`. Preliminary samples below 30 and overlapping forecast dependence are disclosed. Historical holdout metrics remain separate from this forward report card.
+- P3 verification: 119 passed, 3 skipped, 24 subtests passed (full offline pytest, 128.30 s).

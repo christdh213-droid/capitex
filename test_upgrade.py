@@ -149,3 +149,81 @@ def test_context_show_more_ui():
             page.toggle(key='context_show_more_777').set_value(True).run(timeout=60)
             assert len(page.text)==4 and not page.exception
     finally:env.tearDown()
+
+def add_log(symbol='AAPL',target='2026-11-27T18:00:00Z',origin='2026-11-25T21:00:00Z',horizon=1,**extra):
+    from market_calendar import asset_type
+    row=dict(symbol=symbol,asset_type=asset_type(symbol),model_version='fixture',issued_at=origin,data_timestamp=origin,
+        horizon=horizon,starting_price=100.,target_timestamp=target,predicted_price=110.,band_low=90.,band_high=120.,
+        persistence_predicted_price=100.,status='PENDING',payload_json='{}')
+    row.update(extra)
+    with database.get_connection() as conn:
+        return conn.execute('INSERT INTO forecast_logs('+','.join(row)+') VALUES('+','.join('?' for _ in row)+')',list(row.values())).lastrowid
+
+def logged(rowid):
+    with database.get_connection() as conn:return dict(conn.execute('SELECT * FROM forecast_logs WHERE id=?',(rowid,)).fetchone())
+
+def test_grader_friday_close_grouping_idempotency_and_no_transaction(db):
+    from forecast_grader import grade_pending
+    friday=add_log();monday=add_log(target='2026-11-30T21:00:00Z',horizon=7)
+    calls=[]
+    def provider(*args):
+        calls.append(args)
+        # Acquiring a write lock here proves no grader connection holds a transaction.
+        with database.get_connection() as conn:conn.execute('BEGIN IMMEDIATE');conn.execute('UPDATE wallet SET cash=cash')
+        return pd.DataFrame({'Close':[99.,75.],'Stock Splits':[0.,0.]},index=pd.to_datetime(['2026-11-27','2026-11-30'],utc=True))
+    assert grade_pending(pd.Timestamp('2026-11-30T22:00Z'),provider)['graded']==2
+    assert len(calls)==1
+    assert logged(friday)['actual_price']==99 and logged(friday)['actual_timestamp']=='2026-11-27T18:00:00Z'
+    assert logged(monday)['actual_price']==75
+    assert grade_pending(pd.Timestamp('2026-11-30T23:00Z'),provider)['graded']==0 and len(calls)==1
+
+def test_grader_mid_session_and_buffer_never_grade_partial(db):
+    from forecast_grader import grade_pending
+    rowid=add_log()
+    def forbidden(*args):raise AssertionError('Too early to fetch')
+    assert grade_pending(pd.Timestamp('2026-11-27T17:00Z'),forbidden)['graded']==0
+    assert grade_pending(pd.Timestamp('2026-11-27T18:29Z'),forbidden)['graded']==0
+    frame=pd.DataFrame({'Close':[105.]},index=pd.to_datetime(['2026-11-27T15:00:00Z']))
+    assert grade_pending(pd.Timestamp('2026-11-27T18:31Z'),lambda *_:frame)['graded']==0
+    assert logged(rowid)['status']=='PENDING'
+
+def test_crypto_day_end_and_grace(db):
+    from forecast_grader import grade_pending
+    rowid=add_log('BTC-USD','2026-11-23T23:59:59Z','2026-11-22T23:59:59Z')
+    calls=[]
+    def provider(*args):calls.append(1);return pd.DataFrame({'Close':[101.]},index=pd.to_datetime(['2026-11-23'],utc=True))
+    grade_pending(pd.Timestamp('2026-11-23T23:59:59Z'),provider)
+    assert not calls and logged(rowid)['status']=='PENDING'
+    grade_pending(pd.Timestamp('2026-11-24T00:00:01Z'),provider)
+    assert logged(rowid)['actual_timestamp']=='2026-11-23T23:59:59Z'
+    missing=add_log('SOL-USD','2026-11-23T23:59:59Z','2026-11-22T23:59:59Z')
+    grade_pending(pd.Timestamp('2026-11-25T23:59:58Z'),lambda *_:pd.DataFrame())
+    assert logged(missing)['status']=='PENDING'
+    grade_pending(pd.Timestamp('2026-11-26T00:00:00Z'),lambda *_:pd.DataFrame())
+    assert logged(missing)['status']=='UNAVAILABLE'
+
+def test_split_and_stock_missing_grace(db):
+    from forecast_grader import grade_pending
+    split=add_log(origin='2026-11-24T21:00:00Z')
+    frame=pd.DataFrame({'Close':[50.,55.],'Stock Splits':[2.,0.]},index=pd.to_datetime(['2026-11-25','2026-11-27'],utc=True))
+    grade_pending(pd.Timestamp('2026-11-27T19:00Z'),lambda *_:frame)
+    assert logged(split)['unavailable_reason']=='stock_split_in_window'
+    missing=add_log('NVDA')
+    grade_pending(pd.Timestamp('2026-12-01T18:00Z'),lambda *_:pd.DataFrame())
+    assert logged(missing)['status']=='PENDING'
+    grade_pending(pd.Timestamp('2026-12-03T18:00Z'),lambda *_:pd.DataFrame())
+    assert logged(missing)['status']=='UNAVAILABLE'
+
+def test_report_scale_ties_zero_and_identical_baseline_set(db):
+    from report_card import get_report
+    add_log(status='GRADED',actual_price=110.)
+    add_log(horizon=7,status='GRADED',actual_price=100.)
+    add_log('BTC-USD',status='GRADED',actual_price=0.)
+    pooled=get_report()
+    assert 'mae' not in pooled['lstm'] and 'rmse' not in pooled['naive_persistence']
+    assert pooled['graded']==3 and pooled['directional_n']==2 and pooled['low_sample']
+    assert pooled['lstm']['mape_n']==2
+    one=get_report('AAPL')
+    assert one['lstm']['mae']==5 and one['naive_persistence']['mae']==5
+    assert one['directional_n']==1 and one['directional_accuracy_pct']==100
+    assert one['interval_coverage_pct']==100

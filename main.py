@@ -12,6 +12,8 @@ Provides RESTful endpoints for:
 """
 
 from contextlib import asynccontextmanager
+import asyncio
+import os
 from datetime import date, datetime, timedelta, timezone
 import logging
 import pandas as pd
@@ -47,7 +49,17 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.error(f"FastAPI: Error during database initialization: {exc}")
         raise
-    yield
+    task=None
+    if os.getenv('CAPITEX_DISABLE_BACKGROUND_GRADER')!='1':
+        from forecast_grader import grader_loop
+        task=asyncio.create_task(grader_loop())
+    try:
+        yield
+    finally:
+        if task is not None:
+            task.cancel()
+            try:await task
+            except asyncio.CancelledError:pass
 
 
 # ==============================================================================
@@ -579,6 +591,15 @@ def capitex_ledger_export():
     with database.get_connection() as conn:
         rows=[dict(row) for row in conn.execute('SELECT * FROM trade_ledger ORDER BY id DESC')]
     return {'rows':rows}
+
+
+@app.get('/api/report-card',tags=['CAPITEX Forecasting'])
+def capitex_report_card(symbol:Optional[str]=None,asset_type:Optional[Literal['stock','crypto']]=None,
+                        horizon:Optional[Literal[1,7,30]]=None):
+    import report_card
+    try:
+        return report_card.get_report(data_loader._symbol(symbol) if symbol else None,asset_type,horizon)
+    except ValueError as exc:raise HTTPException(400,str(exc)) from exc
 
 
 class ShortOrder(BaseModel):

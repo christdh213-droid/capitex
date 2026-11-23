@@ -409,6 +409,43 @@ def render_reasoning(why):
     caption('News is sourced market context. It does not explain the LSTM weights or its individual decisions.')
 
 
+def render_report_card():
+    from urllib.parse import urlencode
+    st.subheader('Prediction Report Card')
+    filters=st.columns(3)
+    with filters[0]:symbol=st.selectbox('Symbol',['All']+config.DEFAULT_TICKERS,key='report_symbol')
+    with filters[1]:kind=st.selectbox('Asset type',['All','stock','crypto'],key='report_asset_type')
+    with filters[2]:horizon=st.selectbox('Horizon',['All',1,7,30],key='report_horizon')
+    query={k:v for k,v in [('symbol',symbol),('asset_type',kind),('horizon',horizon)] if v!='All'}
+    result=api('GET','/api/report-card'+('?' + urlencode(query) if query else ''))
+    counts=st.columns(3)
+    for col,label,key in zip(counts,['Graded (n)','Pending','Unavailable'],['graded','pending','unavailable']):
+        with col:st.metric(label,result[key])
+    if result['low_sample']:st.info(result['sample_note'])
+    caption(result['overlap_note'])
+    def number(v):return '—' if v is None else f'{v:,.2f}'
+    comparison=[]
+    for name,key in [('LSTM','lstm'),('Naive Persistence','naive_persistence')]:
+        metrics=result[key]
+        row={'Model':name,'MAPE (%)':number(metrics['mape'])}
+        if result['dollar_metrics_visible']:
+            row.update({'MAE (USD)':number(metrics['mae']),'RMSE (USD)':number(metrics['rmse'])})
+        comparison.append(row)
+    st.dataframe(pd.DataFrame(comparison),hide_index=True,width='stretch')
+    caption('LSTM and persistence use the identical graded set. MAPE omits zero actual prices.')
+    caption('LSTM directional accuracy: '+number(result['directional_accuracy_pct'])+f"% · {result['directional_n']} non-flat outcomes; flat actual returns excluded.")
+    caption(result['interval_label']+': '+number(result['interval_coverage_pct'])+'%')
+    rows=[]
+    for r in result['rows']:
+        rows.append({'Symbol':r['symbol'],'Horizon':r['horizon'],'Issued At':local_timestamp(r['issued_at']),
+            'Target Timestamp':local_timestamp(r['target_timestamp']),
+            'Predicted & 80% Band':f"{money(r['predicted_price'])} [{money(r['band_low'])}, {money(r['band_high'])}]",
+            'Actual Price':money(r['actual_price']),'Actual Timestamp':local_timestamp(r['actual_timestamp']),
+            'In-Band':r['in_band'],'Status':r['status'],'Unavailable reason':r['unavailable_reason']})
+    if rows:st.dataframe(pd.DataFrame(rows),hide_index=True,width='stretch')
+    else:st.info('No logged forecasts match these filters yet.')
+
+
 def render_predictor():
     st.markdown('<div class="predictor-title"><div class="eyebrow">CAPITEX AI</div><h1>A clearer view of what’s next.</h1><p>One outlook. A range of possibilities.</p></div>',unsafe_allow_html=True)
     chooser,refresh=st.columns([4,1],vertical_alignment='bottom')
@@ -454,7 +491,7 @@ def render_predictor():
                 <div class="confidence-ring" role="img" aria-label="{confidence:.0f}% model certainty"><svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="48" fill="none" stroke="#302A40" stroke-width="7"/><circle cx="60" cy="60" r="48" fill="none" stroke="#AB9FF2" stroke-width="7" stroke-linecap="round" pathLength="100" stroke-dasharray="{confidence} 100" transform="rotate(-90 60 60)"/></svg><div><b>{confidence:.0f}%</b><span>Certainty</span></div></div></div>''',unsafe_allow_html=True)
         quote=payload['quote']
         name=config.ASSET_UNIVERSE[ticker]['name']
-        st.markdown(f'''<div class="forecast-heading"><div><h3>{escape(name)} <span class="forecast-ticker">{escape(ticker)}</span></h3><span class="chart-key">● Recent price <i>● Estimated 80% range</i></span></div><b>{money(payload['current_price'])}<small>Current quote</small></b></div>''',unsafe_allow_html=True)
+        st.markdown(f'''<div class="forecast-heading"><div><h3>{escape(name)} <span class="forecast-ticker">{escape(ticker)}</span></h3><span class="chart-key">● Recent price <i>● Estimated 80% range</i></span></div><b>{money(payload['current_price'])}<small>Completed daily close</small></b></div>''',unsafe_allow_html=True)
         if quote.get('is_fallback') or quote.get('is_stale'):
             st.warning('Using the latest available historical or delayed quote. This outlook may not reflect current trading.')
         st.plotly_chart(chart_plotter.plot_prediction_corridor(payload),key='prediction_corridor',width='stretch',config={'displayModeBar':False,'scrollZoom':False})
@@ -507,5 +544,7 @@ def wallet_screen():
 
 if nav=='👛 Wallet': wallet_screen()
 else:
-    render_predictor()
+    predictor_view=st.segmented_control('Predictor view',['Analyzer','Prediction Report Card'],default='Analyzer',required=True,key='predictor_view')
+    if predictor_view=='Prediction Report Card':render_report_card()
+    else:render_predictor()
 st.markdown(f'<div class="footer">{escape(config.FOOTER_TEXT)}</div>',unsafe_allow_html=True)
