@@ -78,6 +78,19 @@ def init_db(db_path: Path | None = None):
             unavailable_reason TEXT, actual_price REAL, actual_timestamp TEXT, graded_at TEXT,
             payload_json TEXT NOT NULL,
             UNIQUE(symbol,horizon,data_timestamp,model_version))''')
+        conn.execute('''CREATE TABLE IF NOT EXISTS news_articles_cache (
+            id INTEGER PRIMARY KEY, symbol TEXT NOT NULL, asset_type TEXT NOT NULL, provider TEXT NOT NULL,
+            title TEXT NOT NULL, publisher TEXT NOT NULL, url TEXT NOT NULL, published_at TEXT NOT NULL,
+            fetched_at TEXT NOT NULL, snippet TEXT NOT NULL, content_hash TEXT NOT NULL,
+            UNIQUE(symbol,content_hash))''')
+        conn.execute('''CREATE TABLE IF NOT EXISTS news_fetch_state (
+            symbol TEXT PRIMARY KEY, fetched_at TEXT NOT NULL, errors_json TEXT NOT NULL)''')
+        conn.execute('''CREATE TABLE IF NOT EXISTS context_summary_cache (
+            id INTEGER PRIMARY KEY, symbol TEXT NOT NULL, evidence_hash TEXT NOT NULL,
+            bullets_json TEXT NOT NULL, counter_thesis_json TEXT NOT NULL, headline_count INTEGER NOT NULL,
+            model_used TEXT NOT NULL, generated_at TEXT NOT NULL, expires_at TEXT NOT NULL,
+            is_stale INTEGER NOT NULL DEFAULT 0)''')
+        conn.execute('CREATE INDEX IF NOT EXISTS context_lookup ON context_summary_cache(symbol,evidence_hash,expires_at)')
         for table, additions in {
             'trade_ledger': {'execution_source': "TEXT DEFAULT 'legacy'",
                              'execution_label': "TEXT DEFAULT 'Historical fill'",

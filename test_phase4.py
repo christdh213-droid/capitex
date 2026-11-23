@@ -84,7 +84,7 @@ class PredictorTests(unittest.TestCase):
             page.session_state['main_navigation']='🧠 AI Predictor'
             page.run(timeout=60)
             self.assertFalse(page.exception,[e.message for e in page.exception])
-            self.assertEqual(page.expander[0].label,'🔍 View AI Reasoning Factors')
+            self.assertEqual(page.expander[0].label,'🔍 Market context behind this outlook')
             self.assertFalse(page.expander[0].proto.expanded)
             self.assertEqual(page.session_state['prediction_horizon'],'7 Days')
             content=' '.join(m.value for m in page.markdown)

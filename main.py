@@ -404,6 +404,7 @@ from threading import RLock
 from time import monotonic
 import reasoning_engine
 import forecast_log
+import market_context
 from time_utils import utc_z
 from market_calendar import completed_history
 from frozen_forecast import load_frozen
@@ -511,10 +512,15 @@ def capitex_predict(ticker:str,horizon:str='7d'):
                    source='Completed unadjusted daily close',is_fallback=False,is_stale=False)
         recent=[{'timestamp':utc_z(stamp),'close':float(r.Close)}
                 for stamp,r in history.tail(60).iterrows() if pd.notna(r.Close)]
-        why=reasoning_engine.build_reasoning(ticker,history)
+        articles=market_context.get_articles(ticker)
+        news=[{'content':{'title':a['title'],'pubDate':a['published_at']}} for a in articles]
+        why=reasoning_engine.build_reasoning(ticker,history,news=news,calendar={},fetch_context=False)
+        context=market_context.get_context(ticker,signals=why.get('technical_summary',{}).get('tags',[]))
+        why['market_context']=context
+        why.setdefault('sentiment',{})['headlines_used']=context['headline_count']
         return dict(forecast,hero={k:forecast[k] for k in
                     ('outlook','expected_change_pct','confidence','median_target_price','horizon_label')},
-                    why=why,quote=quote,history=recent,forecast_as_of=row['data_timestamp'],
+                    why=why,quote=quote,history=recent,forecast_as_of=row['data_timestamp'],context_summary_id=context['context_summary_id'],
                     forecast_log_ids={h:r['id'] for h,r in rows.items()},
                     logged_forecasts={h:{k:v for k,v in r.items() if k!='payload_json'} for h,r in rows.items()})
     except ValueError as exc:

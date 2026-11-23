@@ -362,6 +362,22 @@ def render_academic_inspector(ticker,horizon,payload):
 
 
 def render_reasoning(why):
+    context=why.get('market_context',{})
+    st.markdown('**News Evidence**')
+    bullets=context.get('bullets',[])
+    show_key='context_show_more_'+str(context.get('context_summary_id','none'))
+    if len(bullets)>3:
+        st.toggle('Show more',key=show_key)
+    visible=bullets if st.session_state.get(show_key,False) else bullets[:3]
+    if not visible:caption('No verified recent event found')
+    for bullet in visible:
+        st.markdown('• **Reported event**')
+        st.text(bullet['verified_event'])
+        if bullet.get('possible_implication'):
+            caption('Interpretation, not reported fact: '+bullet['possible_implication'])
+        st.link_button(bullet['publisher']+' · '+local_timestamp(bullet['published_at']),bullet['url'])
+    caption(f"{context.get('headline_count',0)} recent headlines included")
+    st.markdown('**Price & Technical Signals**')
     sentiment=why.get('sentiment',{})
     score=max(0,min(100,float(sentiment.get('score',50))))
     label=escape(sentiment.get('label','Neutral'))
@@ -382,7 +398,15 @@ def render_reasoning(why):
                 badges.append(f'<span class="factor-pill {tone}">{escape(tag["label"])}</span>')
             st.markdown('<div class="factor-pills">'+''.join(badges)+'</div>',unsafe_allow_html=True)
         else: caption(empty)
-    caption('These factors describe market context; they are not explanations of the LSTM’s individual decisions.')
+    st.markdown('**What could challenge this outlook?**')
+    counter=context.get('counter_thesis',{})
+    caption(counter.get('signal_note','No independent counter-evidence available.'))
+    for signal in counter.get('signals',[]):caption('Observed signal: '+signal['label'])
+    for bullet in counter.get('articles',[]):
+        st.text(bullet['verified_event'])
+        if bullet.get('possible_implication'):caption('Interpretation, not reported fact: '+bullet['possible_implication'])
+        st.link_button(bullet['publisher'],bullet['url'])
+    caption('News is sourced market context. It does not explain the LSTM weights or its individual decisions.')
 
 
 def render_predictor():
@@ -435,7 +459,7 @@ def render_predictor():
             st.warning('Using the latest available historical or delayed quote. This outlook may not reflect current trading.')
         st.plotly_chart(chart_plotter.plot_prediction_corridor(payload),key='prediction_corridor',width='stretch',config={'displayModeBar':False,'scrollZoom':False})
         caption(f"As of {local_timestamp(payload.get('forecast_as_of',quote['timestamp']))} · Estimated 80% range · Certainty is a model score, not a success probability.")
-        with st.expander('🔍 View AI Reasoning Factors',expanded=False):
+        with st.expander('🔍 Market context behind this outlook',expanded=False):
             render_reasoning(payload['why'])
         st.button(f'Trade {ticker} in CAPITEX Wallet →',key='trade_prediction',width='stretch',
             type='primary',on_click=trade_prediction,args=(ticker,))

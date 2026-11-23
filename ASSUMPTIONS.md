@@ -15,3 +15,13 @@
 - Model version is the first 24 characters of the trained manifest fingerprint. Inference-only fixtures use a deterministic config fingerprint. Existing weights and original scaler arrays are loaded; no model training/rebuilding occurs. Residual calibration/evaluation uses the unchanged existing functions. Missing trained weights return a clear error.
 - The old alternate-outlook UI test clears its temporary forecast log between independent mock models; ordinary refresh tests assert persistence/deduplication.
 - P2 verification: 102 passed, 3 skipped, 24 subtests passed (full offline pytest, 61.11 s). Existing long/short wallet tests remain green.
+
+## P1: cached provider evidence
+- News comes only from provider titles/snippets, never fetched article pages. Optional Finnhub and zero-key yfinance cover stock and crypto aliases; only relevant articles published within the last seven days are candidates.
+- `news_fetch_state` is an additional table so empty/error results also respect the 15-minute refetch TTL. Canonical URLs and 90%-similar normalized titles deduplicate candidates; original cache rows remain available.
+- Summaries expire after 30 minutes, are marked stale, and are never deleted. Evidence hash is SHA-256 of sorted candidate content hashes plus `capitex-grounded-v1`.
+- Optional LLM uses `OPENAI_API_KEY`, `CAPITEX_LLM_MODEL` (default `gpt-4o-mini`), one request and a 10-second timeout. No local transformer or additional LLM SDK is loaded.
+- Code validates allowed article IDs, schema and numeric support. As a stricter grounding rule, verified events must be exact provider excerpts. URLs, publishers and publication dates are hydrated exclusively from SQLite; LLM attempts to provide these fields are rejected.
+- Deterministic fallback quotes the headline and uses cautious keyword-category interpretations, or omits an implication. Counter-thesis uses cited articles and/or the stored computed technical tags; absence of evidence is stated explicitly.
+- UI shows up to three bullets initially, an ID-keyed session-state Show more toggle, source links and explicit interpretation labels. News is context, not LSTM attribution. API returns `context_summary_id`.
+- P1 verification: 114 passed, 3 skipped, 24 subtests passed (full offline pytest, 66.42 s), including Show more AppTest.
