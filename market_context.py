@@ -7,14 +7,13 @@ from datetime import timedelta
 import pandas as pd
 import requests
 from news_provider import yahoo_news
+from news_entities import relevance
 import config,database
 from market_calendar import asset_type
 from time_utils import now_utc,utc_z
 
-PROMPT_VERSION='capitex-grounded-v1'
+PROMPT_VERSION='capitex-grounded-v2-relevance'
 _LOCKS=[RLock() for _ in range(32)]
-ALIASES={'BTC-USD':['BTC','Bitcoin'],'ETH-USD':['ETH','Ethereum'],'SOL-USD':['SOL','Solana'],
-         'GOOGL':['GOOGL','GOOG','Alphabet','Google'],'META':['META','Meta Platforms','Facebook']}
 
 def canonical_url(value):
     parts=urlsplit(str(value))
@@ -24,14 +23,7 @@ def canonical_url(value):
 
 def normalized_headline(text):return ' '.join(re.findall(r'\w+',str(text).casefold()))
 
-def _related(value):
-    if isinstance(value,str):return re.split(r'[,\s]+',value.upper())
-    if isinstance(value,list):return [str(v.get('symbol') or v.get('ticker') or '') if isinstance(v,dict) else str(v).upper() for v in value]
-    return []
-
 def parse_articles(symbol,items,provider,now):
-    aliases=ALIASES.get(symbol,[symbol,config.ASSET_UNIVERSE.get(symbol,{}).get('name',symbol)])
-    aliases=list(dict.fromkeys(aliases+[re.sub(r'\s+(Inc\.?|Corp\.?|Corporation)$','',str(a),flags=re.I) for a in aliases]))
     out=[]
     for item in items if isinstance(items,list) else []:
         if not isinstance(item,dict):continue
@@ -39,10 +31,7 @@ def parse_articles(symbol,items,provider,now):
         title=c.get('title') or c.get('headline');snippet=c.get('summary') or c.get('description') or ''
         if not isinstance(title,str) or not title.strip():continue
         if not isinstance(snippet,str):snippet=''
-        related=_related(item.get('related') or item.get('relatedTickers') or c.get('relatedTickers') or c.get('related'))
-        attributed=symbol in related or symbol.removesuffix('-USD') in related
-        body=title+' '+snippet
-        if not attributed and not any(len(a)>1 and re.search(r'(?<!\w)'+re.escape(a)+r'(?!\w)',body,re.I) for a in aliases):continue
+        if relevance(symbol,title,snippet) is None:continue
         value=c.get('pubDate') or c.get('displayTime') or c.get('providerPublishTime') or c.get('datetime') or item.get('providerPublishTime')
         try:
             stamp=pd.Timestamp(value,unit='s',tz='UTC') if isinstance(value,(int,float)) else pd.Timestamp(value)
@@ -89,8 +78,13 @@ def get_articles(symbol,now=None,providers=None):
             rows=[dict(r) for r in conn.execute('SELECT * FROM news_articles_cache WHERE symbol=? AND published_at>=? AND published_at<=? ORDER BY published_at DESC,id DESC',
                      (symbol,utc_z(now-timedelta(days=7)),stamp))]
         # Same article syndicated under tracking links or near-identical titles counts once.
+        # Recheck cached rows too: old metadata-only matches must never leak through.
+        ranked=[(relevance(symbol,r['title'],r['snippet']),r) for r in rows]
+        ranked=[(tier,r) for tier,r in ranked if tier is not None]
+        ranked.sort(key=lambda pair:pair[1]['published_at'],reverse=True)
+        ranked.sort(key=lambda pair:pair[0])
         kept=[]
-        for row in rows:
+        for _,row in ranked:
             title=normalized_headline(row['title'])
             if any(row['url']==r['url'] or SequenceMatcher(None,title,normalized_headline(r['title'])).ratio()>=.90 for r in kept):continue
             kept.append(row)
@@ -167,6 +161,8 @@ def get_context(symbol,now=None,providers=None,llm_call=None,signals=None):
                     model=os.getenv('CAPITEX_LLM_MODEL','gpt-4o-mini')
             except Exception:
                 bullets=deterministic(articles);counter=[]
+        rank={r['id']:i for i,r in enumerate(articles)}
+        bullets.sort(key=lambda b:rank[b['article_id']])
         hydrated=_hydrate(bullets,articles)
         observed=[{'label':str(s['label']),'tone':str(s.get('tone','neutral'))} for s in (signals or []) if isinstance(s,dict) and 'label' in s][:3]
         counter_payload={'articles':_hydrate(counter,articles),'signals':observed,

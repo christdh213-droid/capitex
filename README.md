@@ -213,9 +213,19 @@ early closes; crypto daily bars end at 23:59:59 UTC.
 plain-English interpretations and counter-evidence. This context does not explain
 the LSTM's internal weights. Provider titles/snippets are the only article content
 used. News refetches after 15 minutes; summaries expire after 30 minutes and are
-retained for old orders. With no keys, Yahoo Search (ticker plus coin-name queries
-for crypto), public Yahoo headline RSS fallback, and deterministic formatting work
+retained for old orders. With no keys, Yahoo Search and Yahoo headline RSS query
+both ticker and company/coin name; Google News RSS also searches their combined
+seven-day query. These sources run independently so RSS can add executive/policy
+stories even when Search succeeds. Deterministic formatting works
 as the fallback; missing provider evidence is stated explicitly.
+
+Articles must name the ticker, company or a configured entity/product alias in
+their title or snippet. Yahoo related-ticker metadata alone is never sufficient.
+Direct title matches lead, roundups/other-primary-company titles are demoted,
+and snippet-only matches follow; each tier is newest first. A title about another
+asset excludes incidental target mentions confined to its snippet. Existing cached
+articles are rechecked against the same gate. Company names come from the existing
+asset metadata, with a cached Yahoo metadata lookup for unconfigured tickers.
 
 Optional process environment variables (do not commit API keys):
 

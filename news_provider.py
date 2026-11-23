@@ -7,9 +7,9 @@ from urllib import request
 from urllib.parse import urlencode
 from xml.etree import ElementTree
 import yfinance as yf
-import config
+from concurrent.futures import ThreadPoolExecutor
+from news_entities import company_name
 
-COIN_NAMES={'BTC-USD':'Bitcoin','ETH-USD':'Ethereum','SOL-USD':'Solana'}
 MAX_RSS_BYTES=2_000_000
 
 def parse_rss(payload):
@@ -29,25 +29,36 @@ def parse_rss(payload):
             publisher=item.findtext('source') or 'Yahoo Finance'))
     return articles
 
-def rss_news(symbol):
-    url='https://feeds.finance.yahoo.com/rss/2.0/headline?'+urlencode(dict(s=symbol,region='US',lang='en-US'))
+def _rss_url(url):
     req=request.Request(url,headers={'User-Agent':'CAPITEX/1.0','Accept':'application/rss+xml, application/xml'})
     with request.urlopen(req,timeout=5) as response:
         payload=response.read(MAX_RSS_BYTES+1)
     if len(payload)>MAX_RSS_BYTES:raise ValueError('Yahoo headline RSS exceeds size limit.')
     return parse_rss(payload)
 
+def rss_news(query):
+    return _rss_url('https://feeds.finance.yahoo.com/rss/2.0/headline?'+urlencode(dict(s=query,region='US',lang='en-US')))
+
+def google_news(symbol,name):
+    query=f'"{name}" OR "{symbol}" when:7d'
+    return _rss_url('https://news.google.com/rss/search?'+urlencode(dict(q=query,hl='en-US',gl='US',ceid='US:en')))
+
+def search_news(query):
+    return yf.Search(query,max_results=0,news_count=10,timeout=5).news
+
 def yahoo_news(symbol,now=None):
-    queries=[symbol]
-    if symbol.endswith('-USD'):
-        name=COIN_NAMES.get(symbol) or config.ASSET_UNIVERSE.get(symbol,{}).get('name')
-        if name and name!=symbol:queries.append(name)
-    articles=[]
-    for query in queries:
-        try:
-            news=yf.Search(query,max_results=0,news_count=10,timeout=5).news
-            if isinstance(news,list):articles.extend(item for item in news if isinstance(item,dict))
-        except Exception:
-            # Try the coin alias and then RSS; never fetch linked article pages.
-            continue
-    return articles if articles else rss_news(symbol)
+    name=company_name(symbol)
+    queries=list(dict.fromkeys([symbol,name]))
+    jobs=[(fetch,(query,)) for fetch in (search_news,rss_news) for query in queries]
+    jobs.append((google_news,(symbol,name)))
+    articles=[];failures=[]
+    # Independently query every source, even when Search succeeds. Bound the fan-out.
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures=[pool.submit(fetch,*args) for fetch,args in jobs]
+        for future in futures:
+            try:
+                news=future.result()
+                if isinstance(news,list):articles.extend(item for item in news if isinstance(item,dict))
+            except Exception as exc:failures.append(exc)
+    if not articles and failures:raise failures[-1]
+    return articles
