@@ -61,6 +61,11 @@ def init_db(db_path: Path | None = None):
                 id INTEGER PRIMARY KEY, timestamp TEXT NOT NULL,
                 net_worth REAL NOT NULL, cash REAL NOT NULL, invested_value REAL NOT NULL)""",
         )
+        conn.execute("""CREATE TABLE IF NOT EXISTS short_positions (
+            id INTEGER PRIMARY KEY, symbol TEXT UNIQUE NOT NULL,
+            quantity REAL NOT NULL CHECK(quantity>0), avg_entry_price REAL NOT NULL CHECK(avg_entry_price>0),
+            locked_collateral REAL NOT NULL CHECK(locked_collateral>=0),
+            opened_at TEXT NOT NULL, updated_at TEXT NOT NULL)""")
         for statement in statements:
             conn.execute(statement)
         for table, additions in {

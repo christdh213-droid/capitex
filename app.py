@@ -90,7 +90,7 @@ def render_home(wallet):
         <div class="balance">{money(wallet['net_worth'])}</div>
         <span class="change-pill {'gain' if positive else 'loss loss-bg'}">{'↗' if positive else '↘'} {signed_money(wallet['change_24h'])} ({wallet['change_24h_pct']:+.2f}%) <span class="muted">· {period}</span></span>
         <div class="cash-pills"><span>Available cash <b>{money(wallet['cash'])}</b></span>
-        <span>Invested <b>{money(wallet['invested_value'])}</b></span></div></div>''',unsafe_allow_html=True)
+        <span>Invested <b>{money(wallet['invested_value'])}</b></span><span>Locked collateral <b>{money(wallet.get('total_locked_collateral',0))}</b></span></div></div>''',unsafe_allow_html=True)
     if wallet.get('valuation_estimated'):
         st.warning('Some prices are unavailable. Your balance includes cost estimates for those positions.')
     quick=st.columns(4,gap='small')
@@ -117,6 +117,16 @@ def render_home(wallet):
         for asset in wallet['holdings']: asset_card(asset,'position',True)
     else:
         st.markdown('<div class="empty-state"><div class="empty-symbol">◇</div><strong>Your first position starts here.</strong>Explore the markets below and make a virtual trade.</div>',unsafe_allow_html=True)
+    section('Open short positions',f"{len(wallet.get('short_positions',[]))} assets")
+    for h in wallet.get('short_positions',[]):
+        with st.container(border=True):
+            st.markdown(f"**{escape(h['name'])} · SHORT {escape(h['symbol'])}**")
+            st.markdown(f'<img src="{escape(h["logo"],quote=True)}" width="36" alt="Asset logo" style="border-radius:50%"/>',unsafe_allow_html=True)
+            caption(f"Quantity {h['quantity']:,.8f} · Entry {money(h['avg_entry_price'])} · Live {money(h['current_price'])}")
+            caption(f"Locked collateral {money(h['locked_collateral'])}")
+            tone='gain' if h['unrealized_pnl']>=0 else 'loss'
+            st.markdown(f'<div class="{tone}">P&L {signed_money(h["unrealized_pnl"])} / {h["roi_pct"]:+.2f}%</div>',unsafe_allow_html=True)
+            st.button('Cover',key='cover_'+h['symbol'],on_click=open_asset,args=(h['symbol'],'SHORT_COVER'),width='stretch')
     section('Explore markets','Stocks & crypto · USD')
     for asset in wallet['watchlist']: asset_card(asset)
     caption('Quotes may be delayed. Prices and your portfolio refresh every 30 seconds.')
@@ -146,10 +156,10 @@ def fill_order(fraction,cash,quantity,price):
     action=st.session_state.order_action
     unit=st.session_state.get('order_unit','Dollar Amount')
     if fraction==1:
-        unit='Dollar Amount' if action=='BUY' else 'Share / Token Quantity'
+        unit='Dollar Amount' if action in ('BUY','SHORT_OPEN') else 'Share / Token Quantity'
         st.session_state.order_unit=unit
-    capacity=(cash if action=='BUY' else quantity*price) if unit=='Dollar Amount' else (cash/price if action=='BUY' else quantity)
-    st.session_state.order_size=float(quantity if fraction==1 and action=='SELL' else round(capacity*fraction,8))
+    capacity=(cash if action in ('BUY','SHORT_OPEN') else quantity*price) if unit=='Dollar Amount' else (cash/price if action in ('BUY','SHORT_OPEN') else quantity)
+    st.session_state.order_size=float(quantity if fraction==1 and action in ('SELL','SHORT_COVER') else round(capacity*fraction,8))
     st.session_state.pop('pending_order',None)
 
 
@@ -160,21 +170,23 @@ def change_order_unit():
 
 def render_order(asset):
     action=st.session_state.get('order_action')
-    if action not in ('BUY','SELL'): return
-    holding=asset.get('holding') or {}
+    if action not in ('BUY','SELL','SHORT_OPEN','SHORT_COVER'): return
+    holding=(asset.get('short_position') if action=='SHORT_COVER' else asset.get('holding')) or {}
     quantity=float(holding.get('quantity',0))
     price=asset['current_price']
     with st.container(border=True,key='order_card'):
         title,close=st.columns([5,1])
-        with title: st.markdown(f"#### {'Buy' if action=='BUY' else 'Sell'} {escape(asset['ticker'])}")
+        with title: st.markdown(f"#### {dict(BUY='Buy',SELL='Sell',SHORT_OPEN='Open Short',SHORT_COVER='Cover Short')[action]} {escape(asset['ticker'])}")
         with close:
             if st.button('✕',key='close_order',help='Close order card',width='stretch'):
                 st.session_state.order_action=None;st.rerun()
         caption(f"Available cash {money(asset['cash'])} · You own {quantity:,.6f} {asset['ticker']}")
+        if action.startswith('SHORT'):
+            caption('Profits when price drops · 1x collateral locked. Auto-liquidation at 2x entry on refresh. No borrowing fees in this simulation.')
         unit_default={} if 'order_unit' in st.session_state else {'default':'Dollar Amount'}
         unit=st.segmented_control('Order size',options=['Dollar Amount','Share / Token Quantity'],key='order_unit',required=True,width='stretch',on_change=change_order_unit,**unit_default)
-        fractions=st.columns(3)
-        for col,label,fraction in zip(fractions,['25%','50%','MAX'],[.25,.5,1.]):
+        fractions=st.columns(4)
+        for col,label,fraction in zip(fractions,['25%','50%','75%','MAX'],[.25,.5,.75,1.]):
             with col: st.button(label,key=f'fill_{label}',width='stretch',on_click=fill_order,
                 args=(fraction,asset['cash'],quantity,price))
         size=st.number_input('Dollar amount (USD)' if unit=='Dollar Amount' else 'Share / token quantity',
@@ -182,14 +194,15 @@ def render_order(asset):
             format='%.2f' if unit=='Dollar Amount' else '%.8f',key='order_size')
         estimate=size if unit=='Dollar Amount' else size*price
         st.markdown(f'<p class="caption">Estimated {"cost" if action=="BUY" else "proceeds"}: <b>{money(estimate)}</b> · Fill uses a fresh market quote.</p>',unsafe_allow_html=True)
+        if action=='SHORT_OPEN': caption(f'Required collateral (estimate): {money(estimate)}')
         with st.expander('Position protection',expanded=False):
-            protect=st.checkbox('Set trailing stop and take profit for this purchase',value=False,disabled=action=='SELL')
+            protect=st.checkbox('Set trailing stop and take profit for this purchase',value=False,disabled=action!='BUY')
             if protect and action=='BUY':
                 sl=st.number_input('Trailing stop (%)',min_value=.1,max_value=100.,value=3.,step=.5)
                 tp=st.number_input('Take profit (%)',min_value=.1,max_value=100.,value=6.,step=.5)
             else: sl=tp=None
-        if action=='SELL' and quantity<=0: st.info('You do not own this asset yet.')
-        if st.button(f"Confirm {action.lower()}",type='primary',width='stretch',disabled=size<=0 or (action=='SELL' and quantity<=0),key='execute_order'):
+        if action in ('SELL','SHORT_COVER') and quantity<=0: st.info('You do not own this asset yet.')
+        if st.button(f"Confirm {action.lower().replace('_',' ')}",type='primary',width='stretch',disabled=size<=0 or (action in ('SELL','SHORT_COVER') and quantity<=0),key='execute_order'):
             fingerprint=(asset['ticker'],action,unit,size,sl,tp)
             pending=st.session_state.get('pending_order')
             if not pending or pending['fingerprint']!=fingerprint:
@@ -238,6 +251,11 @@ def render_asset():
     with sell:
         if st.button('SELL',key='sell_action',width='stretch'):
             st.session_state.order_action='SELL';st.session_state.order_size=0.;st.rerun()
+    short,cover=st.columns(2)
+    for col,label,action in [(short,'OPEN SHORT','SHORT_OPEN'),(cover,'COVER SHORT','SHORT_COVER')]:
+        with col:
+            if st.button(label,key=action,width='stretch'):
+                st.session_state.order_action=action;st.session_state.order_size=0.;st.rerun()
     render_order(asset)
     if asset.get('holding'):
         h=asset['holding']
@@ -256,6 +274,11 @@ def render_history(wallet):
                'Quantity':f"{r['quantity']:,.8f}",'Fill price':money(r['price']),
                'Realized P&L':signed_money(r['realized_pnl']),'Fill source':r['execution_label']}
               for r in wallet['trade_ledger']]
+        for r in wallet['trade_ledger']:
+            if r['action'].startswith('SHORT'):
+                color={'SHORT_OPEN':'#AB9FF2','SHORT_COVER':'#54D9EE','SHORT_LIQUIDATED':'#FF5C5C'}[r['action']]
+                label={'SHORT_OPEN':'SHORT','SHORT_COVER':'COVER','SHORT_LIQUIDATED':'LIQUIDATED'}[r['action']]
+                st.markdown(f'<span style="color:{color}">{label} · {escape(r["ticker"])} · {signed_money(r["realized_pnl"])}</span>',unsafe_allow_html=True)
         st.dataframe(pd.DataFrame(rows),hide_index=True,width='stretch')
     else: st.info('Your completed trades will appear here.')
     with st.expander('Position protection',expanded=False):

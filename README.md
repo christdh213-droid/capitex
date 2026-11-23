@@ -171,3 +171,31 @@ Do not remove a database while services are running. To back up WAL databases,
 stop both services first or use SQLite's backup API.
 
 **CAPITEX — Simulated trading for educational purposes only. Not financial advice.**
+
+## Virtual short selling
+
+In an asset detail view, choose **OPEN SHORT** to profit from a falling price,
+then **COVER SHORT** to close part or all of the position. The order panel accepts
+USD or quantity and offers 25%, 50%, 75% and MAX sizing. The wallet lists open
+shorts separately and displays locked collateral alongside available cash.
+
+Opening locks 100% of the entry value without crediting sale proceeds to spendable
+cash. Equity is cash + long value + locked collateral + short unrealized P&L.
+Covering releases proportional collateral plus profit (or minus loss). Losses are
+capped at the position's collateral. At a quote of twice its weighted entry price,
+the position liquidates with no collateral returned. Liquidation checks run on
+wallet refresh and trade processing, not as an unattended background service.
+Unavailable quotes use the entry price as an explicitly estimated valuation and
+cannot trigger liquidation. Short orders require a fresh execution quote and reject
+historical-close fallback. This is a simplified paper model with no borrowing fees.
+
+Routes: `POST /api/short/open` and `POST /api/short/cover` accept `symbol`,
+`quantity`, and optional `client_order_id`. Existing `POST /api/trade` also accepts
+`SHORT_OPEN` / `SHORT_COVER` with `ticker` and either `amount` or `quantity`.
+`GET /api/wallet` adds `short_positions`, `total_locked_collateral`,
+`total_short_unrealized_pnl`, `total_equity`, and `available_cash`.
+The existing `trade_ledger` records all short actions and realized P&L, preserving
+its fill source and idempotency metadata. Startup adds `short_positions` without
+resetting existing records. Wallet reset clears shorts as well as longs.
+
+Run isolated tests: `python -m unittest test_short_selling.ShortTests -v`.

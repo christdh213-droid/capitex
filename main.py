@@ -408,7 +408,7 @@ import reasoning_engine
 class CapitexOrder(BaseModel):
     model_config=ConfigDict(extra='forbid',allow_inf_nan=False)
     ticker:str=Field(min_length=1,max_length=25)
-    action:Literal['BUY','SELL']
+    action:Literal['BUY','SELL','SHORT_OPEN','SHORT_COVER']
     amount:Optional[float]=Field(None,gt=0,le=1e12)
     quantity:Optional[float]=Field(None,gt=0,le=1e12)
     client_order_id:Optional[str]=Field(None,min_length=8,max_length=100)
@@ -443,6 +443,7 @@ def capitex_asset(ticker:str,days_ago:int=Query(44,ge=1,le=90)):
         summary=trading_engine.capitex_wallet_summary(include_watchlist=False)
         result.update(trading_engine.asset_metadata(ticker))
         result['holding']=next((h for h in summary['holdings'] if h['ticker']==ticker),None)
+        result['short_position']=next((h for h in summary['short_positions'] if h['symbol']==ticker),None)
         result['cash']=summary['cash']
         return result
     except ValueError as exc:
@@ -568,3 +569,20 @@ def capitex_ledger_export():
     with database.get_connection() as conn:
         rows=[dict(row) for row in conn.execute('SELECT * FROM trade_ledger ORDER BY id DESC')]
     return {'rows':rows}
+
+
+class ShortOrder(BaseModel):
+    model_config=ConfigDict(extra='forbid',allow_inf_nan=False)
+    symbol:str=Field(min_length=1,max_length=25)
+    quantity:float=Field(gt=0,le=1e12)
+    client_order_id:Optional[str]=Field(None,min_length=8,max_length=100)
+
+
+@app.post('/api/short/open',tags=['CAPITEX Wallet'])
+def capitex_short_open(order:ShortOrder):
+    return capitex_trade(CapitexOrder(ticker=order.symbol,action='SHORT_OPEN',quantity=order.quantity,client_order_id=order.client_order_id))
+
+
+@app.post('/api/short/cover',tags=['CAPITEX Wallet'])
+def capitex_short_cover(order:ShortOrder):
+    return capitex_trade(CapitexOrder(ticker=order.symbol,action='SHORT_COVER',quantity=order.quantity,client_order_id=order.client_order_id))

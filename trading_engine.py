@@ -730,6 +730,8 @@ def _capitex_snapshot(conn, prices, reason):
     cash=float(conn.execute('SELECT cash FROM wallet WHERE id=1').fetchone()[0])
     invested=sum(float(row['quantity'])*prices.get(row['ticker'],float(row['avg_buy_price']))
                  for row in conn.execute('SELECT * FROM holdings WHERE quantity>0'))
+    short_equity=sum(max(0.,r['locked_collateral']+(r['avg_entry_price']-prices.get(r['symbol'],r['avg_entry_price']))*r['quantity']) for r in conn.execute('SELECT * FROM short_positions'))
+    invested+=short_equity
     conn.execute('INSERT INTO portfolio_snapshots(timestamp,net_worth,cash,invested_value,reason) VALUES(?,?,?,?,?)',
                  (now.isoformat(),cash+invested,cash,invested,reason))
 
@@ -737,12 +739,14 @@ def _capitex_snapshot(conn, prices, reason):
 def capitex_wallet_summary(*, include_watchlist=True, snapshot_reason='refresh'):
     with database.get_connection() as conn:
         raw=[dict(r) for r in conn.execute('SELECT * FROM holdings WHERE quantity>0 ORDER BY ticker')]
-    symbols=[row['ticker'] for row in raw]
+        shorts=[dict(r) for r in conn.execute('SELECT * FROM short_positions')]
+    symbols=[row['ticker'] for row in raw]+[r['symbol'] for r in shorts]
     markets=_market_assets(symbols+(config.DEFAULT_TICKERS if include_watchlist else []))
     prices={t:m['price'] for t,m in markets.items() if m['available']}
     with database.get_connection() as conn:
         conn.execute('BEGIN IMMEDIATE')
         # Re-read inside the transaction: a concurrent order may have changed cash/quantity.
+        _liquidate_shorts(conn,prices)
         wallet=dict(conn.execute('SELECT * FROM wallet WHERE id=1').fetchone())
         raw=[dict(r) for r in conn.execute('SELECT * FROM holdings WHERE quantity>0 ORDER BY ticker')]
         holdings=[]
@@ -767,7 +771,17 @@ def capitex_wallet_summary(*, include_watchlist=True, snapshot_reason='refresh')
                              'unrealized_pnl_pct':(value/cost-1)*100 if cost else 0,
                              'valuation_source':'market_quote' if available else 'cost_estimate'})
         invested=sum(h['market_value'] for h in holdings)
-        net_worth=wallet['cash']+invested
+        shorts=[]
+        for r in conn.execute('SELECT * FROM short_positions ORDER BY symbol'):
+            r=dict(r); t=r['symbol']; mark=prices.get(t,r['avg_entry_price'])
+            estimated |= t not in prices
+            pnl=(r['avg_entry_price']-mark)*r['quantity']
+            shorts.append({**asset_metadata(t),**r,'current_price':mark,'unrealized_pnl':pnl,
+                           'roi_pct':(r['avg_entry_price']-mark)/r['avg_entry_price']*100,
+                           'valuation_source':'market_quote' if t in prices else 'entry_estimate'})
+        locked=sum(r['locked_collateral'] for r in shorts)
+        short_pnl=sum(r['unrealized_pnl'] for r in shorts)
+        net_worth=wallet['cash']+invested+locked+short_pnl
         if snapshot_reason and not estimated:
             _capitex_snapshot(conn,prices,snapshot_reason)
         snapshots=[dict(r) for r in conn.execute('SELECT * FROM portfolio_snapshots ORDER BY id')]
@@ -775,8 +789,8 @@ def capitex_wallet_summary(*, include_watchlist=True, snapshot_reason='refresh')
             SUM(CASE WHEN realized_pnl>0 THEN 1 ELSE 0 END) wins,
             SUM(CASE WHEN realized_pnl<0 THEN 1 ELSE 0 END) losses,
             COALESCE(SUM(realized_pnl),0) pnl FROM trade_ledger
-            WHERE action IN ('SELL','STOP_LOSS','TAKE_PROFIT')""").fetchone()
-        trades=conn.execute("SELECT COUNT(*) FROM trade_ledger WHERE action IN ('BUY','SELL','STOP_LOSS','TAKE_PROFIT')").fetchone()[0]
+            WHERE action IN ('SELL','STOP_LOSS','TAKE_PROFIT','SHORT_COVER','SHORT_LIQUIDATED')""").fetchone()
+        trades=conn.execute("SELECT COUNT(*) FROM trade_ledger WHERE action IN ('BUY','SELL','STOP_LOSS','TAKE_PROFIT','SHORT_OPEN','SHORT_COVER','SHORT_LIQUIDATED')").fetchone()[0]
         ledger=[dict(r) for r in conn.execute('SELECT * FROM trade_ledger ORDER BY id DESC LIMIT 200')]
     cutoff=datetime.now(timezone.utc).timestamp()-86400
     prior=[s for s in snapshots if datetime.fromisoformat(s['timestamp']).timestamp()<=cutoff]
@@ -787,7 +801,7 @@ def capitex_wallet_summary(*, include_watchlist=True, snapshot_reason='refresh')
     if len(values):
         peaks=np.maximum.accumulate(values)
         drawdown=float(np.min(np.divide(values-peaks,peaks,out=np.zeros_like(values),where=peaks>0))*100)
-    return dict(cash=wallet['cash'],starting_cash=wallet['starting_cash'],invested_value=invested,
+    return dict(short_positions=shorts,total_locked_collateral=locked,total_short_unrealized_pnl=short_pnl,total_equity=net_worth,available_cash=wallet['cash'],cash=wallet['cash'],starting_cash=wallet['starting_cash'],invested_value=invested,
                 net_worth=net_worth,change_24h=change,
                 change_24h_pct=change/baseline['net_worth']*100 if baseline['net_worth'] else 0,
                 change_period='24h' if prior else 'since_start',holdings=holdings,
@@ -806,6 +820,8 @@ def _order_receipt(row, cash, replay=False):
 def execute_capitex_trade(ticker, action, *, amount=None, quantity=None, client_order_id=None,
                           stop_loss_pct=None, take_profit_pct=None, reason=None):
     """Atomic cash/quantity validation with fresh fills and idempotent client retries."""
+    if action.upper() in ('SHORT_OPEN','SHORT_COVER'):
+        return execute_capitex_short(ticker,action.upper(),amount=amount,quantity=quantity,client_order_id=client_order_id)
     ticker=data_loader._symbol(ticker)
     action=action.upper()
     if action not in ('BUY','SELL'): raise ValueError('Choose BUY or SELL.')
@@ -825,7 +841,7 @@ def execute_capitex_trade(ticker, action, *, amount=None, quantity=None, client_
     with database.get_connection() as conn:
         previous=replay(conn)
         if previous: return previous
-        held_symbols=[r[0] for r in conn.execute('SELECT ticker FROM holdings WHERE quantity>0')]
+        held_symbols=[r[0] for r in conn.execute('SELECT ticker FROM holdings WHERE quantity>0 UNION SELECT symbol FROM short_positions')]
     markets=_market_assets([t for t in held_symbols if t!=ticker])
     prices={t:m['price'] for t,m in markets.items() if m['available']}
     execution=get_execution_price(ticker)
@@ -877,6 +893,7 @@ def execute_capitex_trade(ticker, action, *, amount=None, quantity=None, client_
                             (now,ticker,ledger_action,float(qty),float(price),float(total),float(pnl),
                              execution['execution_source'],execution['execution_label'],execution['quote_timestamp'],client_order_id,fingerprint))
         prices[ticker]=float(price)
+        _liquidate_shorts(conn,prices)
         _capitex_snapshot(conn,prices,'trade')
         receipt=dict(conn.execute('SELECT * FROM trade_ledger WHERE id=?',(cursor.lastrowid,)).fetchone())
     # Prime display price after a fill; never leave the old cached UI quote authoritative.
@@ -888,6 +905,7 @@ def execute_capitex_trade(ticker, action, *, amount=None, quantity=None, client_
 def reset_capitex_wallet():
     with database.get_connection() as conn:
         conn.execute('BEGIN IMMEDIATE')
+        conn.execute('DELETE FROM short_positions')
         conn.execute('DELETE FROM holdings')
         conn.execute('DELETE FROM trade_ledger')
         conn.execute('DELETE FROM portfolio_snapshots')
@@ -911,3 +929,99 @@ def check_capitex_risk():
             triggered.append(execute_capitex_trade(holding['ticker'],'SELL',quantity=holding['quantity'],reason=reason))
     capitex_wallet_summary(include_watchlist=False,snapshot_reason='risk')
     return triggered
+
+
+def _short_close(conn, row, qty, execution, action, client_order_id=None, fingerprint=None):
+    """Close within the caller's write transaction; loss is capped at collateral."""
+    price=float(execution['price'])
+    remaining=float(row['quantity'])-qty
+    if remaining < 1e-8:
+        qty=float(row['quantity']); remaining=0.
+    released=float(row['locked_collateral'])*qty/float(row['quantity'])
+    returned=max(0.,released+(float(row['avg_entry_price'])-price)*qty)
+    if action=='SHORT_LIQUIDATED': returned=0.
+    pnl=returned-released
+    if remaining==0:
+        conn.execute('DELETE FROM short_positions WHERE symbol=?',(row['symbol'],))
+    else:
+        conn.execute('UPDATE short_positions SET quantity=?,locked_collateral=?,updated_at=? WHERE symbol=?',
+                     (remaining,max(0.,row['locked_collateral']-released),datetime.now(timezone.utc).isoformat(),row['symbol']))
+    conn.execute('UPDATE wallet SET cash=cash+? WHERE id=1',(returned,))
+    return _short_ledger(conn,row['symbol'],action,qty,execution,pnl,client_order_id,fingerprint)
+
+
+def _short_ledger(conn,ticker,action,qty,execution,pnl=0.,client_order_id=None,fingerprint=None):
+    cursor=conn.execute('''INSERT INTO trade_ledger(timestamp,ticker,action,quantity,price,total_value,realized_pnl,
+        execution_source,execution_label,quote_timestamp,client_order_id,order_fingerprint) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)''',
+        (datetime.now(timezone.utc).isoformat(),ticker,action,qty,execution['price'],qty*execution['price'],pnl,
+         execution['execution_source'],execution['execution_label'],execution.get('quote_timestamp'),client_order_id,fingerprint))
+    return dict(conn.execute('SELECT * FROM trade_ledger WHERE id=?',(cursor.lastrowid,)).fetchone())
+
+
+def _liquidate_shorts(conn,prices):
+    for row in conn.execute('SELECT * FROM short_positions').fetchall():
+        price=prices.get(row['symbol'])
+        if price is not None and price>=2*row['avg_entry_price']:
+            execution=dict(price=price,execution_source='market_quote',execution_label='Refresh quote: collateral liquidation',
+                           quote_timestamp=datetime.now(timezone.utc).isoformat())
+            _short_close(conn,row,row['quantity'],execution,'SHORT_LIQUIDATED')
+            _capitex_snapshot(conn,prices,'liquidation')
+
+
+def execute_capitex_short(ticker,action,*,quantity=None,amount=None,client_order_id=None):
+    ticker=data_loader._symbol(ticker)
+    if action not in ('SHORT_OPEN','SHORT_COVER'): raise ValueError('Invalid short action.')
+    if (amount is None)==(quantity is None): raise ValueError('Provide exactly one amount or quantity.')
+    value=amount if amount is not None else quantity
+    if isinstance(value,bool) or not math.isfinite(float(value)) or float(value)<=0: raise ValueError('Order size must be finite and positive.')
+    fingerprint=hashlib.sha256(json.dumps([ticker,action,amount,quantity]).encode()).hexdigest()
+    def replay(conn):
+        old=conn.execute('SELECT * FROM trade_ledger WHERE client_order_id=?',(client_order_id,)).fetchone() if client_order_id else None
+        if old:
+            if old['order_fingerprint']!=fingerprint: raise ValueError('Order ID already used for different details.')
+            return _order_receipt(dict(old),conn.execute('SELECT cash FROM wallet WHERE id=1').fetchone()[0],True)
+    with database.get_connection() as conn:
+        previous=replay(conn)
+        if previous:return previous
+        symbols=[r[0] for r in conn.execute('SELECT ticker FROM holdings UNION SELECT symbol FROM short_positions')]
+    markets=_market_assets([t for t in symbols if t!=ticker])
+    prices={t:m['price'] for t,m in markets.items() if m['available']}
+    execution=get_execution_price(ticker)
+    if execution.get('is_fallback') or execution.get('execution_source')!='live_quote':
+        raise ValueError('A fresh live quote is required for short orders. Please retry.')
+    price=float(execution['price'])
+    if not math.isfinite(price) or price<=0: raise ValueError('No valid live execution price.')
+    qty=float((Decimal(str(value))/Decimal(str(price))).quantize(Decimal('0.000000000001'),rounding=ROUND_DOWN)) if amount is not None else float(value)
+    if qty<1e-8: raise ValueError('Short quantity must be at least 0.00000001.')
+    prices[ticker]=price
+    with database.get_connection() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        previous=replay(conn)
+        if previous:return previous
+        row=conn.execute('SELECT * FROM short_positions WHERE symbol=?',(ticker,)).fetchone()
+        cash=conn.execute('SELECT cash FROM wallet WHERE id=1').fetchone()[0]
+        if action=='SHORT_OPEN':
+            collateral=qty*price
+            if not math.isfinite(collateral) or collateral>cash: raise ValueError('Insufficient available cash for 1x short collateral.')
+            if row and price>=2*row['avg_entry_price']: raise ValueError('Position reached liquidation. Refresh the wallet before opening another short.')
+            old_qty=row['quantity'] if row else 0.
+            total_qty=old_qty+qty
+            avg=((old_qty*row['avg_entry_price'] if row else 0.)+collateral)/total_qty
+            locked=(row['locked_collateral'] if row else 0.)+collateral
+            now=datetime.now(timezone.utc).isoformat()
+            conn.execute('''INSERT INTO short_positions(symbol,quantity,avg_entry_price,locked_collateral,opened_at,updated_at)
+                VALUES(?,?,?,?,?,?) ON CONFLICT(symbol) DO UPDATE SET quantity=excluded.quantity,
+                avg_entry_price=excluded.avg_entry_price,locked_collateral=excluded.locked_collateral,updated_at=excluded.updated_at''',
+                (ticker,total_qty,avg,locked,now,now))
+            conn.execute('UPDATE wallet SET cash=? WHERE id=1',(max(0.,cash-collateral),))
+            receipt=_short_ledger(conn,ticker,action,qty,execution,0.,client_order_id,fingerprint)
+        else:
+            if row is None or qty>row['quantity']: raise ValueError('Cover quantity exceeds the open short position.')
+            if price>=2*row['avg_entry_price']:
+                qty=row['quantity']; action='SHORT_LIQUIDATED'
+            receipt=_short_close(conn,row,qty,execution,action,client_order_id,fingerprint)
+        _liquidate_shorts(conn,prices)
+        _capitex_snapshot(conn,prices,'trade')
+        cash=conn.execute('SELECT cash FROM wallet WHERE id=1').fetchone()[0]
+    data_loader.get_live_quote.clear()
+    return _order_receipt(receipt,cash)
