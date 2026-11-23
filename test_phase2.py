@@ -142,7 +142,7 @@ class FeatureReasoningTests(unittest.TestCase):
             def get_news(self,**kwargs): raise ConnectionError('offline')
             def get_calendar(self): raise ConnectionError('offline')
         re.fetch_market_context.clear()
-        with patch.object(re.yf,'Ticker',return_value=Provider()):
+        with patch.object(re.yf,'Ticker',return_value=Provider()),patch('news_provider.yahoo_news',side_effect=ConnectionError('offline')):
             data=re.fetch_market_context('AAPL')
         self.assertEqual(data['source_status']['news'],'unavailable')
         self.assertEqual(data['source_status']['calendar'],'unavailable')

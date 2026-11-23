@@ -78,7 +78,8 @@ def fetch_market_context(ticker):
     result={'news':[],'calendar':{},'source_status':{},
             'fetched_at':pd.Timestamp.now(tz='UTC').isoformat()}
     try:
-        news=provider.get_news(count=20)
+        from news_provider import yahoo_news
+        news=yahoo_news(ticker)
         if not isinstance(news,list): raise ValueError('Unexpected news response')
         result['news']=news
         result['source_status']['news']='available' if news else 'empty'

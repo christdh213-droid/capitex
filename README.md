@@ -213,7 +213,8 @@ early closes; crypto daily bars end at 23:59:59 UTC.
 plain-English interpretations and counter-evidence. This context does not explain
 the LSTM's internal weights. Provider titles/snippets are the only article content
 used. News refetches after 15 minutes; summaries expire after 30 minutes and are
-retained for old orders. With no keys, yfinance and deterministic formatting work
+retained for old orders. With no keys, Yahoo Search (ticker plus coin-name queries
+for crypto), public Yahoo headline RSS fallback, and deterministic formatting work
 as the fallback; missing provider evidence is stated explicitly.
 
 Optional process environment variables (do not commit API keys):

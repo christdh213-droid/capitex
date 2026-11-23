@@ -6,7 +6,7 @@ from urllib.parse import urlsplit,urlunsplit,parse_qsl,urlencode
 from datetime import timedelta
 import pandas as pd
 import requests
-import yfinance as yf
+from news_provider import yahoo_news
 import config,database
 from market_calendar import asset_type
 from time_utils import now_utc,utc_z
@@ -68,8 +68,6 @@ def finnhub_news(symbol,now):
     params={'token':key,'category':'crypto'} if crypto else {'token':key,'symbol':symbol,'from':str((now-timedelta(days=7)).date()),'to':str(now.date())}
     r=requests.get('https://finnhub.io/api/v1/'+('news' if crypto else 'company-news'),params=params,timeout=5)
     r.raise_for_status();return r.json()
-
-def yahoo_news(symbol,now):return yf.Ticker(symbol).get_news(count=30)
 
 def get_articles(symbol,now=None,providers=None):
     now=pd.Timestamp(now or now_utc());stamp=utc_z(now)
